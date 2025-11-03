@@ -5,7 +5,7 @@ from biomapper2.kg_mapper import map_to_kg
 # Define an entity with a name and local identifier
 entity = {
     'name': 'carnitine',
-    'kegg': 'C00487'
+    'kegg.compound': 'C00487'
 }
 
 # Run through the full KG mapping pipeline
@@ -16,4 +16,3 @@ print(f"\nOriginal entity:")
 print(json.dumps(entity, indent=2))
 print(f"\nMapped entity:")
 print(json.dumps(mapped_entity, indent=2))
-
