@@ -9,7 +9,7 @@ from .resolver import resolve
 
 def map_to_kg(entity: Dict[str, Any]) -> Dict[str, Any]:
     entity = copy.deepcopy(entity)  # Use a copy to avoid editing input item
-    norm = Normalizer(biolink_version="4.2.5")  # Instantiate the ID normalizer (should only be done once, up front)
+    norm = Normalizer(biolink_version='4.2.5')  # Instantiate the ID normalizer (should only be done once, up front)
 
     # Perform all mapping steps
     annotate(entity)
