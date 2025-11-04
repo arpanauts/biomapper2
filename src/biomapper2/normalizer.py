@@ -8,17 +8,19 @@ from typing import Dict, Any, Callable, Optional, Tuple, Union, List
 import requests
 import yaml
 
+from .config import BIOLINK_VERSION
+
 
 # TODO: add in the string parsing and other bits necessary from the extractor module in phenome-kg
 # TODO: handle fuzzy id prop names (figure out best match)
 
 
 class Normalizer:
-    def __init__(self, biolink_version: str):
+    def __init__(self):
         self.validator_prop = 'validator'
         self.cleaner_prop = 'cleaner'
         self.known_invalid = 'KNOWN_INVALID'
-        self.normalized_prefixes_to_iris, self.prefix_lowercase_map = self._load_prefix_info(biolink_version)
+        self.normalized_prefixes_to_iris, self.prefix_lowercase_map = self._load_prefix_info(BIOLINK_VERSION)
         self.validator_map = self._load_validator_map()
 
 
