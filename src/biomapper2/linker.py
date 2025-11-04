@@ -6,8 +6,6 @@ import requests
 
 
 def link(entity: Dict[str, Any]) -> Dict[str, Any]:
-    # TODO: add in curie --> KG code (via API)..
-
     curies = entity['curies']
 
     # Get the canonical curies from the KG  # TODO: expose streamlined get_canonical_ids dict endpoint in kestrel

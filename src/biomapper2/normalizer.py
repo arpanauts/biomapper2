@@ -9,6 +9,10 @@ import requests
 import yaml
 
 
+# TODO: add in the string parsing and other bits necessary from the extractor module in phenome-kg
+# TODO: handle fuzzy id prop names (figure out best match)
+
+
 class Normalizer:
     def __init__(self, biolink_version: str):
         self.validator_prop = 'validator'
