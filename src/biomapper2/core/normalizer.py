@@ -13,15 +13,17 @@ from ..config import BIOLINK_VERSION
 
 # TODO: add in the string parsing and other bits necessary from the extractor module in phenome-kg
 # TODO: handle fuzzy id prop names (figure out best match)
+# TODO: get rid of the known_invalid situation (move that stuff fully to spoke id utils for kraken)
 
 
 class Normalizer:
     def __init__(self):
         self.validator_prop = 'validator'
         self.cleaner_prop = 'cleaner'
+        self.aliases_prop = 'aliases'
         self.known_invalid = 'KNOWN_INVALID'
-        self.normalized_prefixes_to_iris, self.prefix_lowercase_map = self._load_prefix_info(BIOLINK_VERSION)
-        self.validator_map = self._load_validator_map()
+        self.vocab_info_map = self._load_prefix_info(BIOLINK_VERSION)
+        self.vocab_validator_map = self._load_validator_map()
 
 
     def normalize(self, entity: Dict[str, Any]) -> Dict[str, Any]:
@@ -29,17 +31,46 @@ class Normalizer:
         curies = set()
         for property_name, value in entity.items():
             if property_name != 'name':
-                try:
-                    curie, iri = self.construct_curie(entity[property_name], property_name)
+                vocab_name = self.determine_vocab(property_name)
+                print(f"vocab name is: {vocab_name}")
+                curie, iri = self.construct_curie(entity[property_name], vocab_name)
+                if curie and curie != self.known_invalid:
                     curies.add(curie)
-                except Exception:
-                    logging.exception(f"Curie formation failed for {property_name} property on entity: {entity}")
 
         entity['curies'] = list(curies)
         return entity
 
 
-    def _load_prefix_info(self, biolink_version: str) -> Tuple[Dict[str, str], Dict[str, str]]:
+    def determine_vocab(self, column_name: str, entity_type: str = None) -> List[str]:
+        """
+        TODO: needs improvement! this is a bare-bones heuristic-based/hardcoded approach..
+        """
+        col_name_snakecase = column_name.lower().replace(' ', '_')
+        col_name_words = col_name_snakecase.split('_')
+        col_name_cleaned = ''.join([word for word in col_name_words if word not in {'id', 'ids', 'code', 'codes'}])
+        print(f"col name cleaned is: {col_name_cleaned}")
+
+        # If we have an exact match, return it
+        if col_name_cleaned in self.vocab_validator_map:
+            return [col_name_cleaned]
+        else:
+            # Inspect vocab aliases (explicit and implicit ones) to try to find a match
+            matches_on_alias = set()
+            for vocab, info in self.vocab_validator_map.items():
+                if info.get(self.aliases_prop) and col_name_cleaned in info[self.aliases_prop]:
+                    # This column matches an explicit alias (defined in the vocab_validator_map)
+                    matches_on_alias.add(vocab)
+                elif '.' in vocab and vocab.split('.')[0] == col_name_cleaned:
+                    # This column matches implicitly, based on the 'root' vocab name (e.g., 'kegg' for 'kegg.compound')
+                    matches_on_alias.add(vocab)
+            if matches_on_alias:
+                return list(matches_on_alias)
+            else:
+                raise ValueError(f"Could not determine vocab for column '{column_name}'. "
+                                 f"Valid vocab names are: {list(self.vocab_validator_map)}")
+
+
+    def _load_prefix_info(self, biolink_version: str) -> Dict[str, Dict[str, str]]:
         """Load Biolink model prefix map and add additional entries as needed"""
         logging.info(f"Grabbing biolink prefix map for version: {biolink_version}")
         url = f"https://raw.githubusercontent.com/biolink/biolink-model/refs/tags/v{biolink_version}/project/prefixmap/biolink-model-prefix-map.json"
@@ -81,15 +112,17 @@ class Normalizer:
         prefix_to_iri_map['OMIM'] = "https://omim.org/entry/"
         prefix_to_iri_map['REACT'] = "https://reactome.org/content/detail/" # Works for Complexes and Pathways (I think)
 
-        # Return a mapping from lowercase prefixes to their normalized form (varying capitalization)
-        prefix_lowercase_map = {prefix.lower(): prefix for prefix in prefix_to_iri_map.keys()}
 
-        return prefix_to_iri_map, prefix_lowercase_map
+        # Return a mapping of lowercase prefixes to their normalized form (varying capitalization) and IRIs
+        vocab_info_map = {prefix.lower(): {'prefix': prefix, 'iri': iri} for prefix, iri in prefix_to_iri_map.items()}
+
+        return vocab_info_map
 
 
-    def _load_validator_map(self) -> Dict[str, Dict[str, Callable]]:
+    def _load_validator_map(self) -> Dict[str, Dict[str, Union[Callable, List[str]]]]:
         validator = self.validator_prop
         cleaner = self.cleaner_prop
+        aliases = self.aliases_prop
         return {
             'ahrq': {validator: self.is_ahrq_id},
             'bfo': {validator: self.is_bfo_id},
@@ -125,7 +158,7 @@ class Normalizer:
             'kegg.reaction': {validator: self.is_kegg_reaction_id},
             'lipidbank': {validator: self.is_lipidbank_id},
             'loinc': {validator: self.is_loinc_id},
-            'lm': {validator: self.is_lipidmaps_id, cleaner: lambda x: x.removeprefix('LM')},
+            'lm': {validator: self.is_lipidmaps_id, cleaner: lambda x: x.removeprefix('LM'), aliases: ['lipidmaps']},
             'mesh': {validator: self.is_mesh_id},
             'metacyc.ec': {validator: self.is_metacyc_ec_id},
             'metacyc.pathway': {validator: self.is_metacyc_pathway_id},
@@ -141,14 +174,14 @@ class Normalizer:
             'pharmvar': {validator: self.is_pharmvar_id},
             'pubchem.compound': {validator: self.is_pubchem_compound_id},
             'plantfa': {validator: self.is_plantfa_id},
-            'react': {validator: self.is_reactome_id},
-            'rm': {validator: self.is_refmet_id, cleaner: lambda x: x.removeprefix('RM')},
+            'react': {validator: self.is_reactome_id, aliases: ['reactome']},
+            'rm': {validator: self.is_refmet_id, cleaner: lambda x: x.removeprefix('RM'), aliases: ['refmet']},
             'slm': {validator: self.is_slm_id, cleaner: lambda x: x.removeprefix('SLM:')},
             'smiles': {validator: self.is_smiles_string},
-            'snomedct': {validator: self.is_snomedct_id, cleaner: self.clean_snomed_id},
+            'snomedct': {validator: self.is_snomedct_id, cleaner: self.clean_snomed_id, aliases: ['snomed']},
             'uberon': {validator: self.is_uberon_id},
             'umls': {validator: self.is_umls_id},
-            'uniprotkb': {validator: self.is_uniprot_id},
+            'uniprotkb': {validator: self.is_uniprot_id, aliases: ['uniprot']},
             'uszipcode': {validator: self.is_uszipcode_id, cleaner: self.clean_zipcode},
             'vesiclepedia': {validator: self.is_vesiclepedia_id},
             'wikipathways': {validator: self.is_wikipathways_id, cleaner: self.clean_wikipathways_id},
@@ -196,8 +229,8 @@ class Normalizer:
         as well.
         """
         # Grab the proper validation and cleaning functions
-        validator = self.validator_map[vocab_prefix_lowercase][self.validator_prop]
-        cleaner = self.validator_map[vocab_prefix_lowercase].get(self.cleaner_prop)
+        validator = self.vocab_validator_map[vocab_prefix_lowercase][self.validator_prop]
+        cleaner = self.vocab_validator_map[vocab_prefix_lowercase].get(self.cleaner_prop)
 
         # Clean the local ID if necessary
         if cleaner:
@@ -218,8 +251,8 @@ class Normalizer:
             is_valid_id, cleaned_local_id = self.is_valid_id(local_id, prefix_lowercase)
             if is_valid_id:
                 # Return the standardized curie and its corresponding IRI
-                prefix_normalized = self.prefix_lowercase_map[prefix_lowercase]
-                iri_root = self.normalized_prefixes_to_iris[prefix_normalized]
+                prefix_normalized = self.vocab_info_map[prefix_lowercase]['prefix']
+                iri_root = self.vocab_info_map[prefix_lowercase]['iri']
                 iri = f"{iri_root}{cleaned_local_id}" if iri_root else ""
                 curie = f"{prefix_normalized}:{cleaned_local_id}"
                 iri = iri

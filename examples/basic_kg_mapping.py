@@ -6,8 +6,8 @@ from biomapper2.kg_mapper import map_to_kg
 # Define an entity with a name and local identifier
 entity = {
     'name': 'carnitine',
-    'kegg.compound': 'C00487',
-    'pubchem.compound': '10917'
+    'kegg': 'C00487',
+    'pubchem': '10917'
 }
 
 # Print out the original entity

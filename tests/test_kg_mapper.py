@@ -8,7 +8,7 @@ def test_map_to_kg_basic():
     """Test basic entity mapping to KG."""
     entity = {
         'name': 'creatinine',
-        'kegg.compound': 'C00791'
+        'kegg_ids': 'C00791'
     }
 
     mapped_entity = map_to_kg(entity)
@@ -18,7 +18,7 @@ def test_map_to_kg_basic():
 
     # Check that mapped_entity has expected fields
     assert 'name' in mapped_entity
-    assert 'kegg.compound' in mapped_entity
+    assert 'kegg_ids' in mapped_entity
     assert 'curies' in mapped_entity
     assert isinstance(mapped_entity['curies'], list)
     assert 'kg_ids' in mapped_entity
@@ -26,7 +26,7 @@ def test_map_to_kg_basic():
 
 def test_map_to_kg_preserves_input():
     """Test that input entity is not modified."""
-    entity = {'name': 'glucose', 'kegg.compound': 'C00031'}
+    entity = {'name': 'glucose', 'kegg': 'C00031'}
     original = entity.copy()
 
     mapped_entity = map_to_kg(entity)
