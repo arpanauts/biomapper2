@@ -1,17 +1,31 @@
 """Tests for kg_mapper module."""
 import pytest
 
-from biomapper2.kg_mapper import map_to_kg
+from biomapper2.mapper import Mapper
 
 
-def test_map_to_kg_basic():
+@pytest.fixture(scope="module")
+def shared_mapper() -> Mapper:
+    """
+    This fixture creates a single Mapper instance that all tests
+    in this module will share.
+    """
+    # This print statement will show you it only runs once per module
+    print("\n--- Creating Mapper instance ---")
+    mapper = Mapper()
+    yield mapper
+
+
+def test_map_to_kg_basic(shared_mapper: Mapper):
     """Test basic entity mapping to KG."""
     entity = {
         'name': 'creatinine',
         'kegg_ids': 'C00791'
     }
-
-    mapped_entity = map_to_kg(entity)
+    mapped_entity = shared_mapper.map_entity_to_kg(item=entity,
+                                                   name_field='name',
+                                                   provided_id_fields=['kegg_ids'],
+                                                   entity_type='metabolite')
 
     # Check that original entity wasn't modified
     assert 'curies' not in entity
@@ -24,37 +38,45 @@ def test_map_to_kg_basic():
     assert 'kg_ids' in mapped_entity
 
 
-def test_map_to_kg_preserves_input():
+def test_map_to_kg_preserves_input(shared_mapper: Mapper):
     """Test that input entity is not modified."""
     entity = {'name': 'glucose', 'kegg': 'C00031'}
     original = entity.copy()
 
-    mapped_entity = map_to_kg(entity)
+    mapped_entity = shared_mapper.map_entity_to_kg(item=entity,
+                                                   name_field='name',
+                                                   provided_id_fields=['kegg'],
+                                                   entity_type='metabolite')
 
     assert entity == original
     assert mapped_entity != entity  # Different object
 
 
-def test_map_to_kg_name_only():
+def test_map_to_kg_name_only(shared_mapper: Mapper):
     """Test handling of minimal entity."""
-    entity = {'name': 'unknown'}
+    entity = {'chemical_name': 'carnitine'}
 
-    mapped_entity = map_to_kg(entity)
+    mapped_entity = shared_mapper.map_entity_to_kg(item=entity,
+                                                   name_field='chemical_name',
+                                                   provided_id_fields=[],
+                                                   entity_type='metabolite')
 
-    assert 'name' in mapped_entity
-    assert mapped_entity['name'] == 'unknown'
+    assert 'chemical_name' in mapped_entity
+    assert mapped_entity['chemical_name'] == 'carnitine'
     # TODO: once have lexical mappings handled, check that mapping is there
 
 
-def test_map_to_kg_multiple_identifiers():
+def test_map_to_kg_multiple_identifiers(shared_mapper: Mapper):
     """Test entity with multiple identifier types."""
     entity = {
         'name': 'aspirin',
         'kegg.compound': 'C01405',
         'drugbank': 'DB00945'
     }
-
-    mapped_entity = map_to_kg(entity)
+    mapped_entity = shared_mapper.map_entity_to_kg(item=entity,
+                                                   name_field='name',
+                                                   provided_id_fields=['kegg.compound', 'drugbank'],
+                                                   entity_type='drug')
 
     assert 'curies' in mapped_entity
     assert len(mapped_entity['curies']) > 1
