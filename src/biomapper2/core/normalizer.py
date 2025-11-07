@@ -366,7 +366,7 @@ class Normalizer:
         Returns:
             Parsed JSON content
         """
-        project_root = Path(__file__).parents[2]
+        project_root = Path(__file__).parents[3]
 
         cache_dir = project_root / 'cache'
         file_name = url.split('/')[-1]
