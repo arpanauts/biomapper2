@@ -282,6 +282,7 @@ class Mapper:
             },
             'assigned_ids': {
                 'coverage': safe_divide(mapped_to_kg_assigned, total_items),
+                'coverage_explanation': f"{mapped_to_kg_assigned} / {total_items}",
                 'per_provided_ids': {
                     'precision': precision_per_provided,
                     'precision_explanation': f"{assigned_mappings_correct_per_provided} / {mapped_to_kg_provided_and_assigned}",

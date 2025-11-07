@@ -12,7 +12,8 @@ mapper = Mapper()
 mapper.map_dataset_to_kg(dataset_tsv_path=str(PROJECT_ROOT_PATH / 'data' / 'examples' / 'olink_protein_metadata.tsv'),
                          entity_type='protein',
                          name_column='Assay',
-                         provided_id_columns=['UniProt'])
+                         provided_id_columns=['UniProt'],
+                         array_delimiters=['_'])
 
 
 # Example with a groundtruth disease dataset
