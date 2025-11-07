@@ -20,7 +20,7 @@ For other platforms, see [uv installation docs](https://docs.astral.sh/uv/gettin
 ```bash
 git clone https://github.com/arpanauts/biomapper2.git
 cd biomapper2
-uv sync
+uv sync --dev
 ```
 
 This will create a virtual environment and install all dependencies.
