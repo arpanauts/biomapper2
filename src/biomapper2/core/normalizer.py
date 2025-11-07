@@ -267,8 +267,8 @@ class Normalizer:
 
 
         # Override prefixes as needed (if Biolink's iri is broken)
-        prefix_to_iri_map['OMIM'] = "https://omim.org/entry/"
-        prefix_to_iri_map['REACT'] = "https://reactome.org/content/detail/" # Works for Complexes and Pathways (I think)
+        prefix_to_iri_map['OMIM'] = "http://purl.bioontology.org/ontology/OMIM/"  # Works for regular ids and MTHU ids
+        prefix_to_iri_map['REACT'] = "https://reactome.org/content/detail/"  # Works for Complexes and Pathways (I think)
 
 
         # Return a mapping of lowercase prefixes to their normalized form (varying capitalization) and IRIs
@@ -651,10 +651,9 @@ class Normalizer:
         # NCBI Taxonomy IDs are positive integers
         return local_id.isdigit() and int(local_id) > 0
 
-    @staticmethod
-    def is_omim_id(local_id: str) -> bool:
-        # OMIM IDs are 6-digit numbers
-        return local_id.isdigit() and len(local_id) == 6
+    def is_omim_id(self, local_id: str) -> bool:
+        # Allows canonical 6-digit IDs OR MTHU-prefixed IDs (from UMLS/MeSH, but in OMIM, like: OMIM:MTHU067886)
+        return (local_id.isdigit() and len(local_id) == 6) or self.is_umls_mthu_id(local_id)
 
     @staticmethod
     def is_pfam_id(local_id: str) -> bool:
