@@ -31,7 +31,7 @@ class Normalizer:
         self.aliases_prop = 'aliases'
         self.vocab_info_map = self._load_prefix_info(biolink_version)
         self.vocab_validator_map = self._load_validator_map()
-        self.field_name_to_vocab_name_cache = dict()
+        self.field_name_to_vocab_name_cache: Dict[str, List[str]] = dict()
 
 
     def normalize(self,
@@ -288,7 +288,7 @@ class Normalizer:
         return vocab_info_map
 
 
-    def _load_validator_map(self) -> Dict[str, Dict[str, Callable | List[str]]]:
+    def _load_validator_map(self) -> Dict[str, Dict[str, Any]]:
         """
         Load vocabulary validator/cleaner function mappings.
 
