@@ -59,7 +59,7 @@ class Normalizer:
                              for id_field in provided_id_fields if pd.notnull(item[id_field])}
         else:
             provided_ids = {id_field: item[id_field] for id_field in provided_id_fields if pd.notnull(item[id_field])}
-        assigned_ids = item.get('assigned_ids')
+        assigned_ids = item.get('assigned_ids', dict())
 
         # Get curies for the provided/assigned IDs
         curies_provided, invalid_ids_provided = self.get_curies(provided_ids, stop_on_invalid_id)
