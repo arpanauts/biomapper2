@@ -18,10 +18,6 @@ import pandas as pd
 from ..config import BIOLINK_VERSION
 
 
-# TODO: add in the string parsing and other bits necessary from the extractor module in phenome-kg
-# TODO: handle fuzzy id prop names (figure out best match)
-
-
 class Normalizer:
     """
     Normalizes local identifiers to Biolink-standard curies.
@@ -35,6 +31,7 @@ class Normalizer:
         self.aliases_prop = 'aliases'
         self.vocab_info_map = self._load_prefix_info(BIOLINK_VERSION)
         self.vocab_validator_map = self._load_validator_map()
+        self.field_name_to_vocab_name_cache = dict()
 
 
     def normalize(self,
@@ -107,7 +104,7 @@ class Normalizer:
 
     def determine_vocab(self, id_field_name: str) -> List[str]:
         """
-        Determine which vocabulary/prefix corresponds to a field/column name.
+        Determine which vocabulary corresponds to an ID field/column name.
 
         Uses heuristic matching against known vocab names and aliases.
 
@@ -115,32 +112,37 @@ class Normalizer:
             id_field_name: Name of ID field/column
 
         Returns:
-            List of matching vocabulary names
+            List of matching vocabulary names (in standardized form)
         """
         logging.debug(f"Determining which vocab corresponds to field '{id_field_name}'")
-        col_name_underscored = re.sub(r'[-\s]+', '_', id_field_name).lower()  # Replace spaces, hyphens with underscores
-        col_name_words = col_name_underscored.split('_')
-        col_name_rejoined = ''.join([word for word in col_name_words if word not in {'id', 'ids', 'code', 'codes', 'list'}])
-        col_name_cleaned = self.clean_vocab_prefix(col_name_rejoined)
-        logging.debug(f"Field name cleaned is: {col_name_cleaned}")
+        field_name_underscored = re.sub(r'[-\s]+', '_', id_field_name).lower()  # Replace spaces, hyphens with underscores
+        field_name_words = field_name_underscored.split('_')
+        field_name_rejoined = ''.join([word for word in field_name_words if word not in {'id', 'ids', 'code', 'codes', 'list'}])
+        field_name_cleaned = self.clean_vocab_prefix(field_name_rejoined)
+        logging.debug(f"Field name cleaned is: {field_name_cleaned}")
 
-        # If we have an exact match, return it
-        if col_name_cleaned in self.vocab_validator_map:
-            return [col_name_cleaned]
+        if field_name_cleaned in self.vocab_validator_map:
+            # We have an exact match, so we return it
+            return [field_name_cleaned]
+        elif field_name_cleaned in self.field_name_to_vocab_name_cache:
+            # We've already processed this field name before, so we return the cached mapping
+            return self.field_name_to_vocab_name_cache[field_name_cleaned]
         else:
-            # Inspect vocab aliases (explicit and implicit ones) to try to find a match
+            # Otherwise we inspect vocab aliases (explicit and implicit ones) to try to find a match
             matches_on_alias = set()
             for vocab, info in self.vocab_validator_map.items():
-                if info.get(self.aliases_prop) and col_name_cleaned in info[self.aliases_prop]:
+                if info.get(self.aliases_prop) and field_name_cleaned in info[self.aliases_prop]:
                     # This field matches an explicit alias (defined in the vocab_validator_map)
                     matches_on_alias.add(vocab)
-                elif '.' in vocab and vocab.split('.')[0] == col_name_cleaned:
+                elif '.' in vocab and vocab.split('.')[0] == field_name_cleaned:
                     # This field matches implicitly, based on the 'root' vocab name (e.g., 'kegg' for 'kegg.compound')
                     matches_on_alias.add(vocab)
-                elif vocab.replace('.', '') == col_name_cleaned:
+                elif vocab.replace('.', '') == field_name_cleaned:
                     # This field matches implicitly, after removing periods (e.g., 'keggcompound' for 'kegg.compound')
                     matches_on_alias.add(vocab)
             if matches_on_alias:
+                # Cache this mapping for quick lookup later
+                self.field_name_to_vocab_name_cache[field_name_cleaned] = list(matches_on_alias)
                 return list(matches_on_alias)
             else:
                 valid_vocab_names = ', '.join([f"{vocab} (or: {', '.join(info[self.aliases_prop])})"
