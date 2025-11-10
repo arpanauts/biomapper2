@@ -25,10 +25,9 @@ mapper.map_dataset_to_kg(
     array_delimiters=[])
 
 
-# Example with a groundtruth metabolites dataset
-mapper.map_dataset_to_kg(dataset_tsv_path=str(PROJECT_ROOT_PATH / 'data' / 'groundtruth' / 'metabolon_metadata_2025.tsv'),
+# Example with a metabolites dataset
+mapper.map_dataset_to_kg(dataset_tsv_path=str(PROJECT_ROOT_PATH / 'data' / 'examples' / 'metabolites_synthetic.tsv'),
                          entity_type='metabolite',
-                         name_column='CHEMICAL_NAME',
-                         provided_id_columns=['INCHIKEY', 'SMILES', 'CAS', 'HMDB', 'KEGG', 'PUBCHEM'],
+                         name_column='name',
+                         provided_id_columns=['INCHIKEY', 'HMDB', 'KEGG', 'PUBCHEM', 'CHEBI'],
                          array_delimiters=[',', ';'])
-

@@ -40,7 +40,7 @@ class Normalizer:
                   array_delimiters: List[str],
                   stop_on_invalid_id: bool = False) -> Tuple[List[str], List[str], List[str], Dict[str, list], Dict[str, list], Dict[str, list]]:
         """
-        Normalize local IDs to Biolink-standard curies.
+        Normalize local IDs to Biolink-standard curies, distinguishing 'provided' vs. 'assigned' IDs.
 
         Args:
             item: Entity containing local IDs
@@ -55,7 +55,7 @@ class Normalizer:
         # Load/clean the provided and assigned local IDs for this item
         if array_delimiters:
             # Parse any delimited strings (multiple identifiers in one string)
-            provided_ids = {id_field: [local_id for local_id in re.split(f"[{''.join(array_delimiters)}]", item[id_field])]
+            provided_ids = {id_field: self._parse_delimited_string(item[id_field], array_delimiters)
                              for id_field in provided_id_fields if pd.notnull(item[id_field])}
         else:
             provided_ids = {id_field: item[id_field] for id_field in provided_id_fields if pd.notnull(item[id_field])}
@@ -91,8 +91,8 @@ class Normalizer:
             vocab_names = self.determine_vocab(id_field_name)
             logging.debug(f"Matching vocabs are: {vocab_names}")
             for local_id in local_ids:
-                # Make sure the local ID is a nice clean string
-                local_id = self.clean_numeric_id(local_id)
+                # Make sure the local ID is a nice clean string (not int or float)
+                local_id = self.format_numeric_id(local_id)
                 # Get the curie for this local ID
                 curie, iri = self.construct_curie(local_id, vocab_names, stop_on_failure=stop_on_invalid_id)
                 if curie:
@@ -216,6 +216,14 @@ class Normalizer:
                 logging.warning(f"Local id '{local_id}' is invalid for {vocab_name_cleaned}. Skipping.")
 
         return curie, iri
+
+
+    @staticmethod
+    def _parse_delimited_string(value: Any, array_delimiters: List[str]) -> Any:
+        if isinstance(value, str):
+            return [local_id for local_id in re.split(f"[{''.join(array_delimiters)}]", value)]
+        else:
+            return value
 
 
     # ------------------------------------------- INSTANTIATION HELPERS  --------------------------------------------- #
@@ -404,7 +412,7 @@ class Normalizer:
         return re.sub(r'[^a-z0-9.]', '', vocab.lower())
 
     @staticmethod
-    def clean_numeric_id(local_id: str | float | int) -> str:
+    def format_numeric_id(local_id: str | float | int) -> str:
         """Convert numeric IDs to strings, removing trailing .0 for whole numbers."""
         try:
             float_val = float(local_id)
@@ -417,7 +425,7 @@ class Normalizer:
         return str(local_id)
 
     def clean_snomed_id(self, local_id: str) -> str:
-        return self.clean_numeric_id(local_id)
+        return self.format_numeric_id(local_id)
 
     @staticmethod
     def clean_zipcode(local_id: str) -> str:

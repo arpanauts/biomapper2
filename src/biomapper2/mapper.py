@@ -117,7 +117,7 @@ class Mapper:
         # TODO: Optionally allow people to input a Dataframe directly, as opposed to TSV path?
 
         # Load tsv into pandas
-        df = pd.read_csv(dataset_tsv_path, sep='\t')
+        df = pd.read_csv(dataset_tsv_path, sep='\t', dtype={id_col: str for id_col in provided_id_columns})
 
         # Do some basic cleanup to try to ensure empty cells are represented consistently
         df[provided_id_columns] = df[provided_id_columns].replace('-', np.nan)
