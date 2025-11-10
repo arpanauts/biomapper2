@@ -35,7 +35,8 @@ class Mapper:
     """
 
     def __init__(self, biolink_version: Optional[str] = None):
-        self.normalizer = Normalizer()  # Instantiate the ID normalizer (should only be done once, up front)
+        # Instantiate the ID normalizer (should only be done once, up front)
+        self.normalizer = Normalizer(biolink_version=biolink_version)
 
 
     def map_entity_to_kg(self,

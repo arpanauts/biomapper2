@@ -29,7 +29,8 @@ class Normalizer:
         self.validator_prop = 'validator'
         self.cleaner_prop = 'cleaner'
         self.aliases_prop = 'aliases'
-        self.vocab_info_map = self._load_prefix_info(biolink_version)
+        self.biolink_version = biolink_version if biolink_version else BIOLINK_VERSION_DEFAULT
+        self.vocab_info_map = self._load_prefix_info()
         self.vocab_validator_map = self._load_validator_map()
         self.field_name_to_vocab_name_cache: Dict[str, List[str]] = dict()
 
@@ -229,20 +230,16 @@ class Normalizer:
     # ------------------------------------------- INSTANTIATION HELPERS  --------------------------------------------- #
 
 
-    def _load_prefix_info(self, biolink_version: Optional[str]) -> Dict[str, Dict[str, str]]:
+    def _load_prefix_info(self) -> Dict[str, Dict[str, str]]:
         """
         Load Biolink model prefix map and add custom entries.
-
-        Args:
-            biolink_version: Biolink model version string
 
         Returns:
             Dictionary mapping lowercase prefixes to {prefix, iri}
         """
-        biolink_version = biolink_version if biolink_version else BIOLINK_VERSION_DEFAULT
-        logging.debug(f"Grabbing biolink prefix map for version: {biolink_version}")
-        url = f"https://raw.githubusercontent.com/biolink/biolink-model/refs/tags/v{biolink_version}/project/prefixmap/biolink-model-prefix-map.json"
-        prefix_to_iri_map = self._load_biolink_file(url, biolink_version)
+        logging.debug(f"Grabbing biolink prefix map for version: {self.biolink_version}")
+        url = f"https://raw.githubusercontent.com/biolink/biolink-model/refs/tags/v{self.biolink_version}/project/prefixmap/biolink-model-prefix-map.json"
+        prefix_to_iri_map = self._load_biolink_file(url, self.biolink_version)
 
         # Remove prefixes as needed
         if 'KEGG' in prefix_to_iri_map:

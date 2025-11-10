@@ -105,5 +105,5 @@ data/                   # Example and groundtruth datasets
 
 Edit `src/biomapper2/config.py` to customize:
 - `KESTREL_API_URL` - Knowledge graph API endpoint (default: production server)
-- `BIOLINK_VERSION` - Biolink model version
+- `BIOLINK_VERSION_DEFAULT` - Default Biolink model version
 - `LOG_LEVEL` - Logging verbosity (DEBUG, INFO, WARNING, ERROR, CRITICAL)
