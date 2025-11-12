@@ -14,6 +14,7 @@ from typing import Dict, Any, Callable, Optional, Tuple, List, Set
 import requests
 import yaml
 import pandas as pd
+from rdkit import Chem
 
 from ..config import BIOLINK_VERSION_DEFAULT
 
@@ -83,7 +84,7 @@ class Normalizer:
             stop_on_invalid_id: Halt on invalid IDs (default: False)
 
         Returns:
-            Tuple of (valid_curies_set, invalid_ids_dict)
+            Tuple of (valid_curies_dict_with_iris, invalid_ids_dict)
         """
         curies = dict()
         invalid_ids = defaultdict(list)
@@ -93,13 +94,14 @@ class Normalizer:
             logging.debug(f"Matching vocabs are: {vocab_names}")
             for local_id in local_ids:
                 # Make sure the local ID is a nice clean string (not int or float)
-                local_id = self.format_numeric_id(local_id)
+                local_id = self.clean_id(local_id)
                 # Get the curie for this local ID
-                curie, iri = self.construct_curie(local_id, vocab_names, stop_on_failure=stop_on_invalid_id)
-                if curie:
-                    curies[curie] = iri
-                else:
-                    invalid_ids[id_field_name].append(local_id)
+                if local_id:  # Sometimes cleaning the local ID can make it empty (like if it was just a space)
+                    curie, iri = self._construct_curie(local_id, vocab_names, stop_on_failure=stop_on_invalid_id)
+                    if curie:
+                        curies[curie] = iri
+                    else:
+                        invalid_ids[id_field_name].append(local_id)
         return curies, dict(invalid_ids)
 
 
@@ -178,7 +180,7 @@ class Normalizer:
         return validator(local_id), local_id
 
 
-    def construct_curie(self, local_id: str, vocab_name_cleaned: str | List[str], stop_on_failure: bool = False) -> Tuple[str, str]:
+    def _construct_curie(self, local_id: str, vocab_name_cleaned: str | List[str], stop_on_failure: bool = False) -> Tuple[str, str]:
         """
         Construct standardized curie from local ID and vocabulary.
 
@@ -350,9 +352,9 @@ class Normalizer:
             'plantfa': {validator: self.is_plantfa_id},
             'react': {validator: self.is_reactome_id, aliases: ['reactome']},
             'rm': {validator: self.is_refmet_id, cleaner: lambda x: x.removeprefix('RM'), aliases: ['refmet']},
-            'slm': {validator: self.is_slm_id, cleaner: lambda x: x.removeprefix('SLM:')},
-            'smiles': {validator: self.is_smiles_string},
-            'snomedct': {validator: self.is_snomedct_id, cleaner: self.clean_snomed_id, aliases: ['snomed']},
+            'slm': {validator: self.is_slm_id, cleaner: lambda x: x.removeprefix('SLM:'), aliases: ['swisslipids']},
+            'smiles': {validator: self.is_smiles_string, cleaner: self.get_canonical_smiles},
+            'snomedct': {validator: self.is_snomedct_id, aliases: ['snomed']},
             'uberon': {validator: self.is_uberon_id},
             'umls': {validator: self.is_umls_id},
             'uniprotkb': {validator: self.is_uniprot_id, aliases: ['uniprot']},
@@ -410,8 +412,8 @@ class Normalizer:
         return re.sub(r'[^a-z0-9.]', '', vocab.lower())
 
     @staticmethod
-    def format_numeric_id(local_id: str | float | int) -> str:
-        """Convert numeric IDs to strings, removing trailing .0 for whole numbers."""
+    def clean_id(local_id: str | float | int) -> str:
+        """Convert numeric IDs to strings, strip whitespace, removing trailing .0 for whole numbers."""
         try:
             float_val = float(local_id)
             # If it's a whole number, return as int string (removes .0)
@@ -419,11 +421,11 @@ class Normalizer:
                 return str(int(float_val))
         except (ValueError, TypeError):
             pass
-        # Return as-is for non-numeric or decimal values
-        return str(local_id)
+        # Return as-is (minus leading/trailing whitespace) for non-numeric or decimal values
+        return str(local_id).strip()
 
     def clean_snomed_id(self, local_id: str) -> str:
-        return self.format_numeric_id(local_id)
+        return self.clean_id(local_id)
 
     @staticmethod
     def clean_zipcode(local_id: str) -> str:
@@ -447,6 +449,35 @@ class Normalizer:
             return f"HMDB00{id_digits}"
         else:
             return local_id
+
+    @staticmethod
+    def get_canonical_smiles(smiles_string: str) -> str:
+        """
+        Convert a SMILES string to its canonical form using RDKit
+
+        Args:
+            smiles_string (str): Input SMILES string
+
+        Returns:
+            str: Canonical SMILES string, or None if invalid
+        """
+        try:
+            # Parse the SMILES string into a molecule object
+            mol = Chem.MolFromSmiles(smiles_string)
+
+            # Check if parsing was successful
+            if mol is None:
+                logging.warning(f"SMILES string '{smiles_string}' is invalid according to rdkit. "
+                                f"Cannot convert it to canonical form.")
+                return smiles_string
+
+            # Generate canonical SMILES
+            canonical_smiles = Chem.MolToSmiles(mol)
+            return canonical_smiles
+
+        except Exception as e:
+            logging.warning(f"Error getting canonical SMILES for '{smiles_string}'; will use input SMILES string. {e}")
+            return smiles_string
 
 
 

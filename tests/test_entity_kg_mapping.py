@@ -89,8 +89,33 @@ def test_custom_biolink_version(shared_mapper: Mapper):
     assert test_mapper.normalizer.biolink_version == "4.2.4"
     entity = {'name': 'glucose', 'kegg': 'C00031'}
 
-    mapped_entity = shared_mapper.map_entity_to_kg(item=entity,
-                                                   name_field='name',
-                                                   provided_id_fields=['kegg'],
-                                                   entity_type='metabolite')
+    mapped_entity = test_mapper.map_entity_to_kg(item=entity,
+                                                 name_field='name',
+                                                 provided_id_fields=['kegg'],
+                                                 entity_type='metabolite')
     assert len(mapped_entity['curies']) == 1
+
+
+def test_smiles_canonical_conversion(shared_mapper: Mapper):
+    canonical_smiles = 'CCCCC/C=C\\C/C=C\\C/C=C\\C/C=C\\CCCC(=O)OCCN'  # This is already in canonical form
+    non_canonical_smiles = 'C(OCCN)(=O)CCC/C=C\C/C=C\C/C=C\C/C=C\CCCCC'  # This is in NON-canonical form
+
+    # Make sure that when we input a non-canonical smiles string it's converted to canonical form
+    mapped_entity = shared_mapper.map_entity_to_kg(item={'name': 'Virodhamine', 'smiles': non_canonical_smiles},
+                                                   name_field='name',
+                                                   provided_id_fields=['smiles'],
+                                                   entity_type='lipid')
+    assert len(mapped_entity['curies']) == 1
+    curie = mapped_entity['curies'][0]
+    local_id = curie.split(':')[1]
+    assert local_id == canonical_smiles
+
+    # Then make sure that when we input a canonical smiles string, it remains in canonical form
+    mapped_entity = shared_mapper.map_entity_to_kg(item={'name': 'Virodhamine', 'smiles': canonical_smiles},
+                                                   name_field='name',
+                                                   provided_id_fields=['smiles'],
+                                                   entity_type='lipid')
+    assert len(mapped_entity['curies']) == 1
+    curie = mapped_entity['curies'][0]
+    local_id = curie.split(':')[1]
+    assert local_id == canonical_smiles
