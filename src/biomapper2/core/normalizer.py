@@ -422,7 +422,10 @@ class Normalizer:
                 return local_id.removesuffix('.0')
         except (ValueError, TypeError):
             pass
-        return local_id
+        if local_id == '-':
+            return ''
+        else:
+            return local_id
 
     def clean_snomed_id(self, local_id: str) -> str:
         return self.clean_id(local_id)
