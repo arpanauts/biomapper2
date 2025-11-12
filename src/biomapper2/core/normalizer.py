@@ -67,14 +67,14 @@ class Normalizer:
         curies_assigned, invalid_ids_assigned = self.get_curies(assigned_ids, stop_on_invalid_id)
 
         # Form final result
-        curies = curies_provided | curies_assigned
+        curies = set(curies_provided) | set(curies_assigned)
         invalid_ids = {id_field: invalid_ids_provided.get(id_field, []) + invalid_ids_assigned.get(id_field, [])
                        for id_field in set(invalid_ids_provided) | set(invalid_ids_assigned)}
 
         return list(curies), list(curies_provided), list(curies_assigned), invalid_ids, invalid_ids_provided, invalid_ids_assigned
 
 
-    def get_curies(self, local_ids_dict: Dict[str, Any], stop_on_invalid_id: bool = False) -> Tuple[Set[str], Dict[str, Any]]:
+    def get_curies(self, local_ids_dict: Dict[str, Any], stop_on_invalid_id: bool = False) -> Tuple[Dict[str, str], Dict[str, Any]]:
         """
         Convert local IDs to curies for all fields in dictionary.
 
@@ -85,7 +85,7 @@ class Normalizer:
         Returns:
             Tuple of (valid_curies_set, invalid_ids_dict)
         """
-        curies = set()
+        curies = dict()
         invalid_ids = defaultdict(list)
         for id_field_name, local_ids_entry in local_ids_dict.items():
             local_ids = local_ids_entry if isinstance(local_ids_entry, list) else [local_ids_entry]
@@ -97,7 +97,7 @@ class Normalizer:
                 # Get the curie for this local ID
                 curie, iri = self.construct_curie(local_id, vocab_names, stop_on_failure=stop_on_invalid_id)
                 if curie:
-                    curies.add(curie)
+                    curies[curie] = iri
                 else:
                     invalid_ids[id_field_name].append(local_id)
         return curies, dict(invalid_ids)
