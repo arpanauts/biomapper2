@@ -34,6 +34,7 @@ class Normalizer:
         self.vocab_info_map = self._load_prefix_info()
         self.vocab_validator_map = self._load_validator_map()
         self.field_name_to_vocab_name_cache: Dict[str, Set[str]] = dict()
+        self.dashes = {'–', '—', '−', '‐', '‑', '‒'}
 
 
     def normalize(self,
@@ -413,16 +414,15 @@ class Normalizer:
         """Remove non-alphanumeric characters (except periods) from vocabulary name."""
         return re.sub(r'[^a-z0-9.]', '', vocab.lower())
 
-    @staticmethod
-    def clean_id(local_id: str | float | int) -> str:
-        """Convert numeric IDs to strings, strip whitespace, removing trailing .0 for whole numbers."""
+    def clean_id(self, local_id: str | float | int) -> str:
+        """Convert numeric IDs to strings, strip whitespace, removing trailing .0 for whole numbers..."""
         local_id = str(local_id).strip()
         try:
             if local_id.endswith('.0') and float(local_id) == int(float(local_id)):
                 return local_id.removesuffix('.0')
         except (ValueError, TypeError):
             pass
-        if local_id == '-':
+        if local_id in self.dashes:
             return ''
         else:
             return local_id
