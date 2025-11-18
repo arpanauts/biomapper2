@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 
 from .core.normalizer import Normalizer
-from .core.annotator import annotate
+from .core.annotation_engine import annotate
 from .core.linker import link, get_kg_ids, get_kg_id_fields
 from .core.resolver import resolve
 from .utils import setup_logging, safe_divide, calculate_f1_score

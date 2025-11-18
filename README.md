@@ -87,18 +87,19 @@ uv run pytest -vs      # Run with verbose output and logging/prints displayed
 
 ```
 src/biomapper2/
-├── mapper.py           # Main Mapper class - entry point for entity/dataset mapping
-├── config.py           # Configuration (KG API endpoint, logging, etc.)
+├── mapper.py                   # Main Mapper class - entry point for entity/dataset mapping
+├── config.py                   # Configuration (KG API endpoint, logging, etc.)
 ├── core/
-│   ├── annotator.py    # Annotates entities with ontology local IDs
-│   ├── normalizer.py   # Normalizes local IDs to form Biolink-standard curies
-│   ├── linker.py       # Links curies to knowledge graph nodes
-│   └── resolver.py     # Resolves one-to-many entity-->KG matches
-└── utils.py            # Utility functions
+│   ├── annotation_engine.py    # Orchestrates annotation of entities with ontology local IDs
+|   ├── annotators/             # Contains all individual annotators (metabolomics workbench, etc.)
+│   ├── normalizer.py           # Normalizes local IDs to form Biolink-standard curies
+│   ├── linker.py               # Links curies to knowledge graph nodes
+│   └── resolver.py             # Resolves one-to-many entity-->KG matches
+└── utils.py                    # Utility functions
 
-examples/               # Working code examples
-tests/                  # Pytest test suite
-data/                   # Example and groundtruth datasets
+examples/                       # Working code examples
+tests/                          # Pytest test suite
+data/                           # Example and groundtruth datasets
 ```
 
 ### Configuration
