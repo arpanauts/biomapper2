@@ -1,5 +1,11 @@
 """Tests for mapping individual entities to the KG."""
+import json
+
 from biomapper2.mapper import Mapper
+
+
+def print_entity(entity: dict):
+    print(json.dumps(entity, indent=2))
 
 
 def test_map_entity_basic(shared_mapper: Mapper):
@@ -109,7 +115,7 @@ def test_smiles_canonical_conversion(shared_mapper: Mapper):
     curie = mapped_entity['curies_provided'][0]
     local_id = curie.split(':')[1]
     assert local_id == canonical_smiles
-    print(mapped_entity)
+    print_entity(mapped_entity)
 
     # Then make sure that when we input a canonical smiles string, it remains in canonical form
     mapped_entity = shared_mapper.map_entity_to_kg(item={'name': 'Virodhamine', 'smiles': canonical_smiles},
@@ -138,4 +144,42 @@ def test_dash_id_handling(shared_mapper: Mapper):
 
     assert 'curies' in mapped_entity
     assert len(mapped_entity['curies']) >= 1
-    print(mapped_entity)
+    print_entity(mapped_entity)
+
+
+def test_annotation_mode_parameter(shared_mapper: Mapper):
+    entity = {
+        'name': "parkinson's disease",
+        'doid': '14330'
+    }
+    mapped_entity_all = shared_mapper.map_entity_to_kg(item=entity,
+                                                       name_field='name',
+                                                       provided_id_fields=['doid'],
+                                                       entity_type='disease',
+                                                       annotation_mode='all')
+    print_entity(mapped_entity_all)
+    assert mapped_entity_all['assigned_ids']
+
+    mapped_entity_none = shared_mapper.map_entity_to_kg(item=entity,
+                                                        name_field='name',
+                                                        provided_id_fields=['doid'],
+                                                        entity_type='disease',
+                                                        annotation_mode='none')
+    print_entity(mapped_entity_none)
+    assert not mapped_entity_none['assigned_ids']
+
+    mapped_entity_missing_1 = shared_mapper.map_entity_to_kg(item=entity,
+                                                             name_field='name',
+                                                             provided_id_fields=['doid'],
+                                                             entity_type='disease',
+                                                             annotation_mode='missing')
+    print_entity(mapped_entity_missing_1)
+    assert not mapped_entity_missing_1['assigned_ids']
+
+    mapped_entity_missing_2 = shared_mapper.map_entity_to_kg(item=entity,
+                                                             name_field='name',
+                                                             provided_id_fields=[],
+                                                             entity_type='disease',
+                                                             annotation_mode='missing')
+    print_entity(mapped_entity_missing_2)
+    assert mapped_entity_missing_2['assigned_ids']

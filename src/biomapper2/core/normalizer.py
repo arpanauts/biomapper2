@@ -61,9 +61,14 @@ class Normalizer:
                                                 for id_field in provided_id_fields if pd.notnull(item[id_field])}
         assigned_ids = item.get('assigned_ids', dict())
 
+        assigned_ids_flat = defaultdict(set)
+        for annotator, annotator_assigned_ids in assigned_ids.items():
+            for vocab, local_ids_dict in annotator_assigned_ids.items():
+                assigned_ids_flat[vocab] |= set(local_ids_dict)
+
         # Get curies for the provided/assigned IDs
         curies_provided, invalid_ids_provided = self.get_curies(provided_ids, stop_on_invalid_id)
-        curies_assigned, invalid_ids_assigned = self.get_curies(assigned_ids, stop_on_invalid_id)
+        curies_assigned, invalid_ids_assigned = self.get_curies(assigned_ids_flat, stop_on_invalid_id)
 
         # Form final result
         curies = set(curies_provided) | set(curies_assigned)
@@ -87,7 +92,7 @@ class Normalizer:
         curies = dict()
         invalid_ids = defaultdict(list)
         for id_field_name, local_ids_entry in local_ids_dict.items():
-            local_ids = local_ids_entry if isinstance(local_ids_entry, list) else [local_ids_entry]
+            local_ids = [local_ids_entry] if isinstance(local_ids_entry, str) else local_ids_entry
             id_field_names = [id_field_name] if isinstance(id_field_name, str) else id_field_name
             vocab_names = set()
             for field_name in id_field_names:
@@ -346,6 +351,7 @@ class Normalizer:
             'mondo': {validator: self.is_mondo_id},
             'ncbigene': {validator: self.is_ncbigene_id, aliases: ['entrez', 'entrezgene']},
             'ncbitaxon': {validator: self.is_ncbitaxon_id, aliases: ['ncbitaxonomy']},
+            'ncit': {validator: self.is_ncit_id},
             'ndfrt': {validator: self.is_ndfrt_id},
             'nhanes': {validator: self.is_nhanes_id},
             'omim': {validator: self.is_omim_id},
@@ -688,6 +694,11 @@ class Normalizer:
     def is_ncbitaxon_id(local_id: str) -> bool:
         # NCBI Taxonomy IDs are positive integers
         return local_id.isdigit() and int(local_id) > 0
+
+    @staticmethod
+    def is_ncit_id(local_id: str) -> bool:
+        # NCIT IDs (C-codes) consist of the letter 'C' followed by digits
+        return bool(re.match(r'^C\d+$', local_id))
 
     def is_omim_id(self, local_id: str) -> bool:
         # Allows canonical 6-digit IDs OR MTHU-prefixed IDs (from UMLS/MeSH, but in OMIM, like: OMIM:MTHU067886)

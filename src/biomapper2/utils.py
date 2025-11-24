@@ -4,9 +4,16 @@ Utility functions for biomapper2.
 Provides logging setup and mathematical helpers for metric calculations.
 """
 import logging
-from typing import Optional
+from typing import Optional, Dict, Any
 
-from .config import LOG_LEVEL
+import requests
+
+from .config import LOG_LEVEL, KESTREL_API_URL, KESTREL_API_KEY
+
+
+# Type alias for annotation results structure
+# Structure: {annotator: {vocabulary: {local_id: result_metadata_dict}}}
+AssignedIDsDict = Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]
 
 
 def setup_logging():
@@ -65,3 +72,37 @@ def calculate_f1_score(precision: Optional[float], recall: Optional[float]) -> O
         return None
     else:
         return safe_divide(2 * (precision * recall), (precision + recall))
+
+
+# Kestrel API functions
+def kestrel_request(method: str, endpoint: str, **kwargs) -> dict | list[dict]:
+    """
+    Internal helper for making Kestrel API requests.
+
+    Args:
+        method: HTTP method ('GET' or 'POST')
+        endpoint: API endpoint path
+        **kwargs: Additional arguments to pass to requests (json, params, etc.)
+
+    Returns:
+        JSON response from API
+
+    Raises:
+        requests.exceptions.HTTPError: If API returns error status
+        requests.exceptions.RequestException: If request fails
+    """
+    try:
+        response = requests.request(
+            method,
+            f"{KESTREL_API_URL}/{endpoint}",
+            headers={'X-API-Key': KESTREL_API_KEY},
+            **kwargs
+        )
+        response.raise_for_status()
+        return response.json()
+    except requests.exceptions.HTTPError as e:
+        logging.error(f"Kestrel API HTTP error ({endpoint}): {e}", exc_info=True)
+        raise
+    except requests.exceptions.RequestException as e:
+        logging.error(f"Kestrel API request failed ({endpoint}): {e}", exc_info=True)
+        raise

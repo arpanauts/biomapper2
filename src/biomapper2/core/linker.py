@@ -7,10 +7,9 @@ import logging
 from collections import defaultdict
 from typing import Dict, Any, Tuple, List
 
-import requests
 import pandas as pd
 
-from ..config import KESTREL_API_URL, KESTREL_API_KEY
+from ..utils import kestrel_request
 
 
 def link(item: pd.Series | Dict[str, Any]) -> Tuple[Dict[str, List[str]], Dict[str, List[str]], Dict[str, List[str]]]:
@@ -31,7 +30,7 @@ def link(item: pd.Series | Dict[str, Any]) -> Tuple[Dict[str, List[str]], Dict[s
 
 def get_kg_ids(curies: List[str]) -> Dict[str, str]:
     """
-    Query knowledge graph API for canonical node IDs.
+    Query knowledge graph API for canonical node IDs (in bulk).
 
     Args:
         curies: List of curies to look up
@@ -42,20 +41,10 @@ def get_kg_ids(curies: List[str]) -> Dict[str, str]:
     curie_to_kg_id_map = dict()
     if curies:
         # Get the canonical curies from the KG  # TODO: expose streamlined get_canonical_ids dict endpoint in kestrel
-        try:
-            response = requests.post(f"{KESTREL_API_URL}/get-nodes",
-                                     json={'curies': curies},
-                                     headers={'X-API-Key': KESTREL_API_KEY})
-            response.raise_for_status()  # Raises HTTPError for bad status codes
-            result = response.json()
-            curie_to_kg_id_map = {input_curie: node['id'] for input_curie, node in result.items() if node}
-        except requests.exceptions.HTTPError as e:
-            logging.error(f"HTTP error occurred: {e}", exc_info=True)
-            # Optional: re-raise if you want calling code to handle it
-            raise
-        except requests.exceptions.RequestException as e:
-            logging.error(f"Request failed: {e}", exc_info=True)
-            raise
+        results = kestrel_request('POST', 'get-nodes', json={'curies': curies})
+
+        curie_to_kg_id_map = {input_curie: node['id'] for input_curie, node in results.items() if node}
+
     return curie_to_kg_id_map
 
 

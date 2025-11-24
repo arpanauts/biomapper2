@@ -9,7 +9,7 @@ import copy
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Literal
 
 import pandas as pd
 import numpy as np
@@ -45,7 +45,8 @@ class Mapper:
                          provided_id_fields: List[str],
                          entity_type: str,
                          array_delimiters: Optional[List[str]] = None,
-                         stop_on_invalid_id: bool = False) -> pd.Series | Dict[str, Any]:
+                         stop_on_invalid_id: bool = False,
+                         annotation_mode: Literal['all', 'missing', 'none'] = 'missing') -> pd.Series | Dict[str, Any]:
         """
         Map a single entity to knowledge graph nodes.
 
@@ -56,6 +57,10 @@ class Mapper:
             entity_type: Type of entity (e.g., 'metabolite', 'protein')
             array_delimiters: Characters used to split delimited ID strings (default: [',', ';'])
             stop_on_invalid_id: Halt execution on invalid IDs (default: False)
+            annotation_mode: When to annotate
+                - 'all': Annotate all entities
+                - 'missing': Only annotate entities without provided_ids (default)
+                - 'none': Skip annotation entirely (returns empty)
 
         Returns:
             Mapped entity with added fields: curies, kg_ids, chosen_kg_id, etc.
@@ -65,7 +70,7 @@ class Mapper:
         mapped_item = copy.deepcopy(item)  # Use a copy to avoid editing input item
 
         # Do Step 1: annotation of IDs
-        assigned_ids = annotate(mapped_item, name_field, provided_id_fields, entity_type)
+        assigned_ids = annotate(mapped_item, name_field, provided_id_fields, entity_type, mode=annotation_mode)
         mapped_item['assigned_ids'] = assigned_ids
 
         # Do Step 2: normalization of IDs (curie formation)
@@ -98,7 +103,8 @@ class Mapper:
                           entity_type: str,
                           name_column: str,
                           provided_id_columns: List[str],
-                          array_delimiters: Optional[List[str]] = None) -> Tuple[str, Dict[str, Any]]:
+                          array_delimiters: Optional[List[str]] = None,
+                          annotation_mode: Literal['all', 'missing', 'none'] = 'missing') -> Tuple[str, Dict[str, Any]]:
         """
         Map all entities in a dataset to knowledge graph nodes.
 
@@ -108,6 +114,10 @@ class Mapper:
             name_column: Column containing entity names
             provided_id_columns: Columns containing local identifiers
             array_delimiters: Characters used to split delimited ID strings (default: [',', ';'])
+            annotation_mode: When to annotate
+                - 'all': Annotate all entities
+                - 'missing': Only annotate entities without provided_ids (default)
+                - 'none': Skip annotation entirely (returns empty)
 
         Returns:
             Tuple of (output_tsv_path, stats_summary)
@@ -129,7 +139,8 @@ class Mapper:
             lambda row: annotate(item=row,
                                  name_field=name_column,
                                  provided_id_fields=provided_id_columns,
-                                 entity_type=entity_type),
+                                 entity_type=entity_type,
+                                 mode=annotation_mode),
             axis=1
         )
         logging.info(f"After step 1 (annotation), df is: \n{df}")
