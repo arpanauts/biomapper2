@@ -15,7 +15,7 @@ import pandas as pd
 import numpy as np
 
 from .core.normalizer import Normalizer
-from .core.annotation_engine import annotate
+from .core.annotation_engine import AnnotationEngine
 from .core.linker import link, get_kg_ids, get_kg_id_fields
 from .core.resolver import resolve
 from .utils import setup_logging, safe_divide, calculate_f1_score
@@ -35,7 +35,8 @@ class Mapper:
     """
 
     def __init__(self, biolink_version: Optional[str] = None):
-        # Instantiate the ID normalizer (should only be done once, up front)
+        # Instantiate the mapping modules (should only be done once, up front)
+        self.annotation_engine = AnnotationEngine()
         self.normalizer = Normalizer(biolink_version=biolink_version)
 
 
@@ -70,7 +71,7 @@ class Mapper:
         mapped_item = copy.deepcopy(item)  # Use a copy to avoid editing input item
 
         # Do Step 1: annotation of IDs
-        assigned_ids = annotate(mapped_item, name_field, provided_id_fields, entity_type, mode=annotation_mode)
+        assigned_ids = self.annotation_engine.annotate(mapped_item, name_field, provided_id_fields, entity_type, mode=annotation_mode)
         mapped_item['assigned_ids'] = assigned_ids
 
         # Do Step 2: normalization of IDs (curie formation)
@@ -133,16 +134,14 @@ class Mapper:
         # Do some basic cleanup to try to ensure empty cells are represented consistently
         df[provided_id_columns] = df[provided_id_columns].replace('-', np.nan)
         df[provided_id_columns] = df[provided_id_columns].replace('NO_MATCH', np.nan)
+        num_rows_start = len(df)
 
         # Do Step 1: annotate all rows with IDs
-        df['assigned_ids'] = df.apply(
-            lambda row: annotate(item=row,
-                                 name_field=name_column,
-                                 provided_id_fields=provided_id_columns,
-                                 entity_type=entity_type,
-                                 mode=annotation_mode),
-            axis=1
-        )
+        df['assigned_ids'] = self.annotation_engine.annotate(item=df,
+                                                             name_field=name_column,
+                                                             provided_id_fields=provided_id_columns,
+                                                             entity_type=entity_type,
+                                                             mode=annotation_mode)
         logging.info(f"After step 1 (annotation), df is: \n{df}")
 
         # Do Step 2: normalize IDs in all rows to form proper curies
@@ -174,6 +173,13 @@ class Mapper:
             result_type='expand'
         )
         logging.info(f"After step 4 (resolution), df is: \n{df}")
+
+        # Do a little validation of results dataframe
+        num_rows_end = len(df)
+        if num_rows_start != num_rows_end:
+            raise ValueError(
+                f"At end of map_dataset_to_kg(), dataframe has {num_rows_end} rows but started with {num_rows_start} "
+                f"rows. Row count should not change.")
 
         # Dump the final dataframe to a TSV
         output_tsv_path = dataset_tsv_path.replace('.tsv', '_MAPPED.tsv')  # TODO: let this be configurable?
