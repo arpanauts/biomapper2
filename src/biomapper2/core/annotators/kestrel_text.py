@@ -2,12 +2,12 @@ import sys
 from collections import defaultdict
 from typing import Optional
 
-from .base import Annotator
+from .base import BaseAnnotator
 from ...utils import kestrel_request, AssignedIDsDict
 import pandas as pd
 
 
-class KestrelTextSearchAnnotator(Annotator):
+class KestrelTextSearchAnnotator(BaseAnnotator):
 
     slug = 'kestrel-text-search'
 

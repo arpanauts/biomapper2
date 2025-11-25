@@ -6,7 +6,7 @@ import pandas as pd
 from ...utils import AssignedIDsDict
 
 
-class Annotator(ABC):  # Inherit from ABC
+class BaseAnnotator(ABC):  # Inherit from ABC
 
     # Subclasses must define this
     slug: str = NotImplemented

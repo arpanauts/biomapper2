@@ -18,8 +18,8 @@ class AnnotationEngine:
 
     def __init__(self):
         """Initialize the annotation engine and set up available annotators."""
-        # Could initialize any expensive resources here if needed
-        pass
+        self.kestrel_text_search_annotator = KestrelTextSearchAnnotator()
+
 
     def annotate(self,
                  item: pd.Series | Dict[str, Any] | pd.DataFrame,
@@ -72,6 +72,9 @@ class AnnotationEngine:
             return self._annotate_single(item, name_field, provided_id_fields, mode, annotators)
 
 
+    # ------------------------------------- Heper methods --------------------------------------- #
+
+
     def _select_annotators(self, entity_type_cleaned: str) -> List:
         """Select appropriate annotators based on entity type."""
         annotators = []
@@ -79,7 +82,7 @@ class AnnotationEngine:
             pass  # TODO: plug in metabolomics workbench API here..
         if not annotators:
             # Back up to using a text search (this is a PLACEHOLDER, should not be fallback long-term)
-            annotators.append(KestrelTextSearchAnnotator())
+            annotators.append(self.kestrel_text_search_annotator)
         return annotators
 
 
