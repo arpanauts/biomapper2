@@ -57,13 +57,15 @@ class KestrelTextSearchAnnotator(BaseAnnotator):
         for term in search_terms:
             cache[term] = self._kestrel_text_search(term, limit=1)
 
-        # Annotate each entity using the cache  TODO: do in a df apply kind of way?
-        results = [
-            self.get_annotations(row, cache=cache, name_field=name_field)
-            for _, row in entities.iterrows()
-        ]
+        # Annotate each entity using the cache
+        assigned_ids_col = entities.apply(
+            self.get_annotations,
+            axis=1,
+            cache=cache,
+            name_field=name_field
+        )
 
-        return pd.Series(results, index=entities.index)
+        return assigned_ids_col
 
 
     # ----------------------------------------- Helper methods ----------------------------------------------- #

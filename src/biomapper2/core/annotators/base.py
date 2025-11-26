@@ -21,7 +21,7 @@ class BaseAnnotator(ABC):  # Inherit from ABC
         Prepare entity/entities before annotation. Override to customize.
 
         Common use: removing provided_ids to prevent annotators from "cheating"
-        by seeing ground truth IDs during evaluation.
+        by seeing "ground truth" IDs during evaluation.
 
         Args:
             item: Entity or entities to prepare
