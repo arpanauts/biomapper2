@@ -25,11 +25,11 @@ setup_logging()
 
 class Mapper:
     """
-    Maps biological entities and datasets to knowledge graph nodes.
+    Maps biological entities and datasets of entities to knowledge graph nodes.
 
     Performs four-step mapping pipeline:
-    1. Annotation - assign additional IDs via external APIs
-    2. Normalization - convert local IDs to Biolink-standard curies
+    1. Annotation - assign additional vocab IDs via external APIs
+    2. Normalization - convert un-normalized vocab IDs to Biolink-standard curies
     3. Linking - map curies to knowledge graph nodes
     4. Resolution - resolve one-to-many mappings
     """
@@ -56,7 +56,7 @@ class Mapper:
         Args:
             item: Entity with name and ID fields
             name_field: Field containing entity name
-            provided_id_fields: List of fields containing local identifiers
+            provided_id_fields: List of fields containing vocab identifiers
             entity_type: Type of entity (e.g., 'metabolite', 'protein')
             array_delimiters: Characters used to split delimited ID strings (default: [',', ';'])
             stop_on_invalid_id: Halt execution on invalid IDs (default: False)
@@ -72,7 +72,7 @@ class Mapper:
         array_delimiters = array_delimiters if array_delimiters is not None else [',', ';']
         mapped_item = copy.deepcopy(item)  # Use a copy to avoid editing input item
 
-        # Do Step 1: annotation of local vocab IDs
+        # Do Step 1: annotate with vocab IDs
         annotation_result = self.annotation_engine.annotate(
             item=mapped_item,
             name_field=name_field,
@@ -82,7 +82,7 @@ class Mapper:
         )
         mapped_item = merge_into_entity(mapped_item, annotation_result)
 
-        # Do Step 2: normalization of local vocab IDs (curie formation)
+        # Do Step 2: normalize vocab IDs to form proper curies
         normalization_result = self.normalizer.normalize(
             item=mapped_item,
             provided_id_fields=provided_id_fields,
@@ -91,11 +91,11 @@ class Mapper:
         )
         mapped_item = merge_into_entity(mapped_item, normalization_result)
 
-        # Do Step 3: linking to KG nodes
+        # Do Step 3: link curies to KG nodes
         linked_result = self.linker.link(mapped_item)
         mapped_item = merge_into_entity(mapped_item, linked_result)
 
-        # Do Step 4: resolving one-to-many KG matches
+        # Do Step 4: resolve one-to-many KG matches
         resolved_result = self.resolver.resolve(mapped_item)
         mapped_item = merge_into_entity(mapped_item, resolved_result)
 
@@ -116,7 +116,7 @@ class Mapper:
             dataset_tsv_path: Path to TSV file containing dataset
             entity_type: Type of entities (e.g., 'metabolite', 'protein')
             name_column: Column containing entity names
-            provided_id_columns: Columns containing local identifiers
+            provided_id_columns: Columns containing (un-normalized) vocab identifiers
             array_delimiters: Characters used to split delimited ID strings (default: [',', ';'])
             annotation_mode: When to annotate
                 - 'all': Annotate all entities
@@ -139,7 +139,7 @@ class Mapper:
         df[provided_id_columns] = df[provided_id_columns].replace('NO_MATCH', np.nan)
         num_rows_start = len(df)
 
-        # Do Step 1: annotate all rows with IDs
+        # Do Step 1: annotate all rows with vocab IDs
         annotation_df = self.annotation_engine.annotate(
             item=df,
             name_field=name_column,
@@ -150,7 +150,7 @@ class Mapper:
         df = df.join(annotation_df)
         logging.info(f"After step 1 (annotation), df is: \n{df}")
 
-        # Do Step 2: normalize IDs in all rows to form proper curies
+        # Do Step 2: normalize vocab IDs in all rows to form proper curies
         normalization_df = self.normalizer.normalize(
             item=df,
             provided_id_fields=provided_id_columns,
