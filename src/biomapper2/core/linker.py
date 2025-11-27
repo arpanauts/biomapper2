@@ -3,6 +3,7 @@ Curie linking module for mapping to knowledge graph nodes.
 
 Queries the knowledge graph API to find canonical node IDs for normalized curies.
 """
+
 import logging
 from collections import defaultdict
 from typing import Dict, Any, List, Optional
@@ -33,7 +34,6 @@ class Linker:
         else:
             return self._link_entity(item)
 
-
     def _link_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
         """
         Link curies to KG IDs for all entities in a DataFrame (bulk request).
@@ -46,7 +46,7 @@ class Linker:
         """
         # Collect all unique curies across all entities
         all_curies = set()
-        for curies_list in df['curies']:
+        for curies_list in df["curies"]:
             all_curies.update(curies_list)
 
         # Single bulk request for all curies
@@ -56,13 +56,12 @@ class Linker:
         return df.apply(
             lambda entity: self._link_entity(entity, curie_to_kg_id_cache=curie_to_kg_id_cache),
             axis=1,
-            result_type='expand'  # Expands Series into columns
+            result_type="expand",  # Expands Series into columns
         )
 
-
-    def _link_entity(self,
-                     entity: pd.Series | Dict[str, Any],
-                     curie_to_kg_id_cache: Optional[Dict[str, str]] = None) -> pd.Series:
+    def _link_entity(
+        self, entity: pd.Series | Dict[str, Any], curie_to_kg_id_cache: Optional[Dict[str, str]] = None
+    ) -> pd.Series:
         """
         Link a single entity's curies to knowledge graph node IDs.
 
@@ -76,16 +75,11 @@ class Linker:
         """
         # Use cache if provided, otherwise fetch KG IDs for this entity
         if curie_to_kg_id_cache is None:
-            curie_to_kg_id_cache = self.get_kg_ids(entity['curies'])
+            curie_to_kg_id_cache = self.get_kg_ids(entity["curies"])
 
         kg_ids, kg_ids_provided, kg_ids_assigned = self._format_kg_id_fields(entity, curie_to_kg_id_cache)
 
-        return pd.Series({
-            'kg_ids': kg_ids,
-            'kg_ids_provided': kg_ids_provided,
-            'kg_ids_assigned': kg_ids_assigned
-        })
-
+        return pd.Series({"kg_ids": kg_ids, "kg_ids_provided": kg_ids_provided, "kg_ids_assigned": kg_ids_assigned})
 
     @staticmethod
     def get_kg_ids(curies: List[str]) -> Dict[str, str]:
@@ -101,17 +95,16 @@ class Linker:
         curie_to_kg_id_map = dict()
         if curies:
             # Get the canonical curies from the KG  # TODO: expose streamlined get_canonical_ids dict endpoint in kestrel
-            results = kestrel_request('POST', 'get-nodes', json={'curies': curies})
+            results = kestrel_request("POST", "get-nodes", json={"curies": curies})
 
-            curie_to_kg_id_map = {input_curie: node['id'] for input_curie, node in results.items() if node}
+            curie_to_kg_id_map = {input_curie: node["id"] for input_curie, node in results.items() if node}
 
         return curie_to_kg_id_map
 
-
     @staticmethod
-    def _format_kg_id_fields(entity: pd.Series | Dict[str, Any],
-                             curie_to_kg_id_map: Dict[str, str]) -> tuple[
-        Dict[str, List[str]], Dict[str, List[str]], Dict[str, List[str]]]:
+    def _format_kg_id_fields(
+        entity: pd.Series | Dict[str, Any], curie_to_kg_id_map: Dict[str, str]
+    ) -> tuple[Dict[str, List[str]], Dict[str, List[str]], Dict[str, List[str]]]:
         """
         Organize KG IDs by source (overall, provided, assigned) and record their corresponding curie 'votes'.
 
@@ -122,16 +115,15 @@ class Linker:
         Returns:
             Tuple of (kg_ids_dict, kg_ids_provided_dict, kg_ids_assigned_dict)
         """
-        curies = entity['curies']
-        curies_provided = entity['curies_provided']
-        curies_assigned = entity['curies_assigned']
+        curies = entity["curies"]
+        curies_provided = entity["curies_provided"]
+        curies_assigned = entity["curies_assigned"]
 
         kg_ids = Linker._reverse_curie_map(curie_to_kg_id_map, curie_subset=curies)
         kg_ids_provided = Linker._reverse_curie_map(curie_to_kg_id_map, curie_subset=curies_provided)
         kg_ids_assigned = Linker._reverse_curie_map(curie_to_kg_id_map, curie_subset=curies_assigned)
 
         return kg_ids, kg_ids_provided, kg_ids_assigned
-
 
     @staticmethod
     def _reverse_curie_map(curie_map: Dict[str, str], curie_subset: List[str]) -> Dict[str, List[str]]:

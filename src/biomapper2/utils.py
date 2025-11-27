@@ -3,6 +3,7 @@ Utility functions for biomapper2.
 
 Provides logging setup and mathematical helpers for metric calculations.
 """
+
 import logging
 from typing import Optional, Dict, Any
 
@@ -20,16 +21,15 @@ AssignedIDsDict = Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]
 def setup_logging():
     """Configure logging based on LOG_LEVEL in config.py."""
     if not logging.getLogger().hasHandlers():  # Skip setup if it's already been done
-        valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+        valid_levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
         level = LOG_LEVEL.upper()
 
         if level not in valid_levels:
             print(f"Invalid log level '{LOG_LEVEL}', defaulting to INFO")
-            level = 'INFO'
+            level = "INFO"
 
         logging.basicConfig(
-            level=getattr(logging, level),
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            level=getattr(logging, level), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
 
 
@@ -94,10 +94,7 @@ def kestrel_request(method: str, endpoint: str, **kwargs) -> Any:
     """
     try:
         response = requests.request(
-            method,
-            f"{KESTREL_API_URL}/{endpoint}",
-            headers={'X-API-Key': KESTREL_API_KEY},
-            **kwargs
+            method, f"{KESTREL_API_URL}/{endpoint}", headers={"X-API-Key": KESTREL_API_KEY}, **kwargs
         )
         response.raise_for_status()
         return response.json()

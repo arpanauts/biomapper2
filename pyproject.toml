@@ -20,6 +20,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["src/biomapper2"]
 
+[tool.black]
+line-length = 120
+
 [dependency-groups]
 dev = [
     "mypy>=1.18.2",

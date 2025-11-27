@@ -11,11 +11,8 @@ class BaseAnnotator(ABC):  # Inherit from ABC
     # Subclasses must define this
     slug: str = NotImplemented
 
-
     def prepare(
-            self,
-            item: dict | pd.Series | pd.DataFrame,
-            provided_id_fields: List[str]
+        self, item: dict | pd.Series | pd.DataFrame, provided_id_fields: List[str]
     ) -> dict | pd.Series | pd.DataFrame:
         """
         Prepare entity/entities before annotation. Override to customize.
@@ -32,13 +29,9 @@ class BaseAnnotator(ABC):  # Inherit from ABC
         """
         return item
 
-
     @abstractmethod
     def get_annotations(
-            self,
-            entity: dict | pd.Series,
-            name_field: str,
-            cache: Optional[dict] = None
+        self, entity: dict | pd.Series, name_field: str, cache: Optional[dict] = None
     ) -> AssignedIDsDict:
         """
         Get annotations for a single entity.
@@ -53,13 +46,8 @@ class BaseAnnotator(ABC):  # Inherit from ABC
         """
         pass
 
-
     @abstractmethod
-    def get_annotations_bulk(
-            self,
-            entities: pd.DataFrame,
-            name_field: str
-    ) -> pd.Series:  # Series of AssignedIdsDicts
+    def get_annotations_bulk(self, entities: pd.DataFrame, name_field: str) -> pd.Series:  # Series of AssignedIdsDicts
         """
         Get annotations for multiple entities with bulk API call.
 

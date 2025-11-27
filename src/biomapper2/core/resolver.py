@@ -3,6 +3,7 @@ One-to-many resolution module for selecting single KG nodes.
 
 Resolves cases where multiple KG nodes match an entity by selecting the best candidate.
 """
+
 import logging
 from typing import Dict, Any, List, Optional
 
@@ -26,10 +27,9 @@ class Resolver:
         logging.debug(f"Beginning one-to-many resolution step..")
 
         if isinstance(item, pd.DataFrame):
-            return item.apply(self._resolve_entity, axis=1, result_type='expand')
+            return item.apply(self._resolve_entity, axis=1, result_type="expand")
         else:
             return self._resolve_entity(item)
-
 
     def _resolve_entity(self, entity: pd.Series | Dict[str, Any]) -> pd.Series:
         """
@@ -41,16 +41,17 @@ class Resolver:
         Returns:
             Named Series with fields: chosen_kg_id, chosen_kg_id_provided, chosen_kg_id_assigned
         """
-        chosen_kg_id = self._choose_best_kg_id(entity['kg_ids'])
-        chosen_kg_id_provided = self._choose_best_kg_id(entity['kg_ids_provided'])
-        chosen_kg_id_assigned = self._choose_best_kg_id(entity['kg_ids_assigned'])
+        chosen_kg_id = self._choose_best_kg_id(entity["kg_ids"])
+        chosen_kg_id_provided = self._choose_best_kg_id(entity["kg_ids_provided"])
+        chosen_kg_id_assigned = self._choose_best_kg_id(entity["kg_ids_assigned"])
 
-        return pd.Series({
-            'chosen_kg_id': chosen_kg_id,
-            'chosen_kg_id_provided': chosen_kg_id_provided,
-            'chosen_kg_id_assigned': chosen_kg_id_assigned
-        })
-
+        return pd.Series(
+            {
+                "chosen_kg_id": chosen_kg_id,
+                "chosen_kg_id_provided": chosen_kg_id_provided,
+                "chosen_kg_id_assigned": chosen_kg_id_assigned,
+            }
+        )
 
     @staticmethod
     def _choose_best_kg_id(kg_ids_dict: Dict[str, List[str]]) -> Optional[str]:

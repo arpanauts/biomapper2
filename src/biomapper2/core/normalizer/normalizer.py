@@ -3,6 +3,7 @@ Main normalization logic for converting local IDs to Biolink-standard curies.
 
 Validates local identifiers and constructs standardized curies using Biolink model prefixes.
 """
+
 import logging
 import re
 import sys
@@ -23,22 +24,24 @@ class Normalizer:
     Validates IDs against regex patterns and constructs properly formatted curies
     using Biolink model prefix mappings.
     """
+
     def __init__(self, biolink_version: Optional[str] = None):
-        self.validator_prop = 'validator'
-        self.cleaner_prop = 'cleaner'
-        self.aliases_prop = 'aliases'
+        self.validator_prop = "validator"
+        self.cleaner_prop = "cleaner"
+        self.aliases_prop = "aliases"
         self.biolink_version = biolink_version if biolink_version else BIOLINK_VERSION_DEFAULT
         self.vocab_info_map = load_prefix_info(self.biolink_version)
         self.vocab_validator_map = load_validator_map()
         self.field_name_to_vocab_name_cache: Dict[str, Set[str]] = dict()
-        self.dashes = {'-', '–', '—', '−', '‐', '‑', '‒'}
+        self.dashes = {"-", "–", "—", "−", "‐", "‑", "‒"}
 
-
-    def normalize(self,
-                  item: pd.Series | Dict[str, Any] | pd.DataFrame,
-                  provided_id_fields: List[str],
-                  array_delimiters: List[str],
-                  stop_on_invalid_id: bool = False) -> pd.Series | pd.DataFrame:
+    def normalize(
+        self,
+        item: pd.Series | Dict[str, Any] | pd.DataFrame,
+        provided_id_fields: List[str],
+        array_delimiters: List[str],
+        stop_on_invalid_id: bool = False,
+    ) -> pd.Series | pd.DataFrame:
         """
         Normalize local IDs to Biolink-standard curies, distinguishing 'provided' vs. 'assigned' IDs.
 
@@ -61,18 +64,19 @@ class Normalizer:
                 axis=1,
                 provided_id_fields=provided_id_fields,
                 array_delimiters=array_delimiters,
-                result_type='expand'  # Expands Series into columns
+                result_type="expand",  # Expands Series into columns
             )
         else:
             # Normalize the single input entity
             return self._normalize_entity(item, provided_id_fields, array_delimiters, stop_on_invalid_id)
 
-
-    def _normalize_entity(self,
-                          entity: pd.Series | Dict[str, Any],
-                          provided_id_fields: List[str],
-                          array_delimiters: List[str],
-                          stop_on_invalid_id: bool = False) -> pd.Series:
+    def _normalize_entity(
+        self,
+        entity: pd.Series | Dict[str, Any],
+        provided_id_fields: List[str],
+        array_delimiters: List[str],
+        stop_on_invalid_id: bool = False,
+    ) -> pd.Series:
         """
         Normalize local IDs to Biolink-standard curies, distinguishing 'provided' vs. 'assigned' IDs.
 
@@ -87,9 +91,16 @@ class Normalizer:
         """
         # Load/clean the provided and assigned local IDs for this item
         # Parse any delimited strings (multiple identifiers in one string)
-        provided_ids: Dict[str | tuple, Any] = {id_field: self._parse_delimited_string(entity[id_field], array_delimiters) if array_delimiters else entity[id_field]
-                                                for id_field in provided_id_fields if pd.notnull(entity[id_field])}
-        assigned_ids = entity.get('assigned_ids', dict())
+        provided_ids: Dict[str | tuple, Any] = {
+            id_field: (
+                self._parse_delimited_string(entity[id_field], array_delimiters)
+                if array_delimiters
+                else entity[id_field]
+            )
+            for id_field in provided_id_fields
+            if pd.notnull(entity[id_field])
+        }
+        assigned_ids = entity.get("assigned_ids", dict())
 
         assigned_ids_flat: Dict[str, Set[Any]] = defaultdict(set)
         for annotator, annotator_assigned_ids in assigned_ids.items():
@@ -102,21 +113,26 @@ class Normalizer:
 
         # Form final result
         curies = set(curies_provided) | set(curies_assigned)
-        invalid_ids = {id_field: invalid_ids_provided.get(id_field, []) + invalid_ids_assigned.get(id_field, [])
-                       for id_field in set(invalid_ids_provided) | set(invalid_ids_assigned)}
+        invalid_ids = {
+            id_field: invalid_ids_provided.get(id_field, []) + invalid_ids_assigned.get(id_field, [])
+            for id_field in set(invalid_ids_provided) | set(invalid_ids_assigned)
+        }
 
         # Return a named Series
-        return pd.Series({
-            'curies': list(curies),
-            'curies_provided': list(curies_provided),
-            'curies_assigned': list(curies_assigned),
-            'invalid_ids': invalid_ids,
-            'invalid_ids_provided': invalid_ids_provided,
-            'invalid_ids_assigned': invalid_ids_assigned
-        })
+        return pd.Series(
+            {
+                "curies": list(curies),
+                "curies_provided": list(curies_provided),
+                "curies_assigned": list(curies_assigned),
+                "invalid_ids": invalid_ids,
+                "invalid_ids_provided": invalid_ids_provided,
+                "invalid_ids_assigned": invalid_ids_assigned,
+            }
+        )
 
-
-    def get_curies(self, local_ids_dict: Dict[Any, Any], stop_on_invalid_id: bool = False) -> Tuple[Dict[str, str], Dict[str | tuple, List[str]]]:
+    def get_curies(
+        self, local_ids_dict: Dict[Any, Any], stop_on_invalid_id: bool = False
+    ) -> Tuple[Dict[str, str], Dict[str | tuple, List[str]]]:
         """
         Convert local IDs to curies for all fields in dictionary.
 
@@ -149,7 +165,6 @@ class Normalizer:
                         invalid_ids[id_field_name].append(local_id)
         return curies, dict(invalid_ids)
 
-
     def determine_vocab(self, id_field_name: str) -> Set[str]:
         """
         Determine which vocabulary corresponds to an ID field/column name.
@@ -163,10 +178,13 @@ class Normalizer:
             List of matching vocabulary names (in standardized form)
         """
         logging.debug(f"Determining which vocab corresponds to field '{id_field_name}'")
-        field_name_underscored = re.sub(r'[-\s]+', '_', id_field_name).lower()  # Replace spaces, hyphens with underscores
-        field_name_words = field_name_underscored.split('_')
-        field_name_rejoined = ''.join([word for word in field_name_words if word not in {'id', 'ids', 'code', 'cid',
-                                                                                         'codes', 'list'}])
+        field_name_underscored = re.sub(
+            r"[-\s]+", "_", id_field_name
+        ).lower()  # Replace spaces, hyphens with underscores
+        field_name_words = field_name_underscored.split("_")
+        field_name_rejoined = "".join(
+            [word for word in field_name_words if word not in {"id", "ids", "code", "cid", "codes", "list"}]
+        )
         field_name_cleaned = cleaners.clean_vocab_prefix(field_name_rejoined)
         logging.debug(f"Field name cleaned is: {field_name_cleaned}")
 
@@ -183,10 +201,10 @@ class Normalizer:
                 if info.get(self.aliases_prop) and field_name_cleaned in info[self.aliases_prop]:
                     # This field matches an explicit alias (defined in the vocab_validator_map)
                     matches_on_alias.add(vocab)
-                elif '.' in vocab and vocab.split('.')[0] == field_name_cleaned:
+                elif "." in vocab and vocab.split(".")[0] == field_name_cleaned:
                     # This field matches implicitly, based on the 'root' vocab name (e.g., 'kegg' for 'kegg.compound')
                     matches_on_alias.add(vocab)
-                elif vocab.replace('.', '') == field_name_cleaned:
+                elif vocab.replace(".", "") == field_name_cleaned:
                     # This field matches implicitly, after removing periods (e.g., 'keggcompound' for 'kegg.compound')
                     matches_on_alias.add(vocab)
             if matches_on_alias:
@@ -194,14 +212,18 @@ class Normalizer:
                 self.field_name_to_vocab_name_cache[field_name_cleaned] = matches_on_alias
                 return matches_on_alias
             else:
-                valid_vocab_names = ', '.join([f"{vocab} (or: {', '.join(info[self.aliases_prop])})"
-                                               if info.get(self.aliases_prop) else vocab
-                                               for vocab, info in self.vocab_validator_map.items()])
-                error_message = (f"Could not determine vocab for field '{id_field_name}'. "
-                                 f"Valid vocab names are: {valid_vocab_names}")
+                valid_vocab_names = ", ".join(
+                    [
+                        f"{vocab} (or: {', '.join(info[self.aliases_prop])})" if info.get(self.aliases_prop) else vocab
+                        for vocab, info in self.vocab_validator_map.items()
+                    ]
+                )
+                error_message = (
+                    f"Could not determine vocab for field '{id_field_name}'. "
+                    f"Valid vocab names are: {valid_vocab_names}"
+                )
                 logging.error(error_message)
                 raise ValueError(error_message)
-
 
     def is_valid_id(self, local_id: str, vocab_name_cleaned: str) -> Tuple[bool, str]:
         """
@@ -225,8 +247,9 @@ class Normalizer:
         # Then determine whether it's valid for the specified vocabulary
         return validator(local_id), local_id
 
-
-    def _construct_curie(self, local_id: str, vocab_name_cleaned: str | List[str], stop_on_failure: bool = False) -> Tuple[str, str]:
+    def _construct_curie(
+        self, local_id: str, vocab_name_cleaned: str | List[str], stop_on_failure: bool = False
+    ) -> Tuple[str, str]:
         """
         Construct standardized curie from local ID and vocabulary.
 
@@ -239,17 +262,17 @@ class Normalizer:
             Tuple of (curie, iri) - empty strings if validation fails
         """
         # First, if this is a proper curie - remove its prefix
-        local_id = local_id.split(':')[1] if ':' in local_id and not local_id.startswith('http') else local_id
+        local_id = local_id.split(":")[1] if ":" in local_id and not local_id.startswith("http") else local_id
         # Construct a standardized curie for the given local ID and vocabulary (or list of vocabularies; first valid kept)
         prefixes_lowercase = [vocab_name_cleaned] if isinstance(vocab_name_cleaned, str) else vocab_name_cleaned
-        curie = ''
-        iri = ''
+        curie = ""
+        iri = ""
         for prefix_lowercase in prefixes_lowercase:
             is_valid_id, cleaned_local_id = self.is_valid_id(local_id, prefix_lowercase)
             if is_valid_id:
                 # Return the standardized curie and its corresponding IRI
-                prefix_normalized = self.vocab_info_map[prefix_lowercase]['prefix']
-                iri_root = self.vocab_info_map[prefix_lowercase]['iri']
+                prefix_normalized = self.vocab_info_map[prefix_lowercase]["prefix"]
+                iri_root = self.vocab_info_map[prefix_lowercase]["iri"]
                 iri = f"{iri_root}{cleaned_local_id}" if iri_root else ""
                 curie = f"{prefix_normalized}:{cleaned_local_id}"
                 iri = iri
@@ -266,7 +289,6 @@ class Normalizer:
 
         return curie, iri
 
-
     @staticmethod
     def _parse_delimited_string(value: Any, array_delimiters: List[str]) -> Any:
         if isinstance(value, str):
@@ -274,16 +296,15 @@ class Normalizer:
         else:
             return value
 
-
     def clean_id(self, local_id: str | float | int) -> str:
         """Convert numeric IDs to strings, strip whitespace, removing trailing .0 for whole numbers..."""
         local_id = str(local_id).strip()
         try:
-            if local_id.endswith('.0') and float(local_id) == int(float(local_id)):
-                return local_id.removesuffix('.0')
+            if local_id.endswith(".0") and float(local_id) == int(float(local_id)):
+                return local_id.removesuffix(".0")
         except (ValueError, TypeError):
             pass
         if local_id in self.dashes:
-            return ''
+            return ""
         else:
             return local_id
