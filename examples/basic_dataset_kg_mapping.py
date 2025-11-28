@@ -2,7 +2,6 @@ from pathlib import Path
 
 from biomapper2.mapper import Mapper
 
-
 PROJECT_ROOT_PATH = Path(__file__).parents[1]
 
 

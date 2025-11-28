@@ -1,20 +1,18 @@
 import logging
-import sys
 from collections import defaultdict
-from typing import Optional, Dict, Any
+from typing import Any
 
-from .base import BaseAnnotator
-from ...utils import kestrel_request, AssignedIDsDict
 import pandas as pd
+
+from ...utils import AssignedIDsDict, kestrel_request
+from .base import BaseAnnotator
 
 
 class KestrelTextSearchAnnotator(BaseAnnotator):
 
     slug = "kestrel-text-search"
 
-    def get_annotations(
-        self, entity: dict | pd.Series, name_field: str, cache: Optional[dict] = None
-    ) -> AssignedIDsDict:
+    def get_annotations(self, entity: dict | pd.Series, name_field: str, cache: dict | None = None) -> AssignedIDsDict:
         """Get annotations via Kestrel text search."""
 
         # Extract the value to search
@@ -26,7 +24,7 @@ class KestrelTextSearchAnnotator(BaseAnnotator):
             else:
                 results = self._kestrel_text_search(search_term, limit=1)
 
-            annotations: Dict[str, Dict[str, Dict[str, Any]]] = defaultdict(lambda: defaultdict(dict))
+            annotations: dict[str, dict[str, dict[str, Any]]] = defaultdict(lambda: defaultdict(dict))
             if results:
                 result = results[0]
                 node_id = result["id"]

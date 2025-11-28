@@ -8,13 +8,13 @@ import logging
 import re
 import sys
 from collections import defaultdict
-from typing import Dict, Any, Optional, Tuple, List, Set
+from typing import Any
 
 import pandas as pd
 
-from . import validators, cleaners
-from .vocab_config import load_prefix_info, load_validator_map
 from ...config import BIOLINK_VERSION_DEFAULT
+from . import cleaners
+from .vocab_config import load_prefix_info, load_validator_map
 
 
 class Normalizer:
@@ -25,21 +25,21 @@ class Normalizer:
     using Biolink model prefix mappings.
     """
 
-    def __init__(self, biolink_version: Optional[str] = None):
+    def __init__(self, biolink_version: str | None = None):
         self.validator_prop = "validator"
         self.cleaner_prop = "cleaner"
         self.aliases_prop = "aliases"
         self.biolink_version = biolink_version if biolink_version else BIOLINK_VERSION_DEFAULT
         self.vocab_info_map = load_prefix_info(self.biolink_version)
         self.vocab_validator_map = load_validator_map()
-        self.field_name_to_vocab_name_cache: Dict[str, Set[str]] = dict()
+        self.field_name_to_vocab_name_cache: dict[str, set[str]] = dict()
         self.dashes = {"-", "–", "—", "−", "‐", "‑", "‒"}
 
     def normalize(
         self,
-        item: pd.Series | Dict[str, Any] | pd.DataFrame,
-        provided_id_fields: List[str],
-        array_delimiters: List[str],
+        item: pd.Series | dict[str, Any] | pd.DataFrame,
+        provided_id_fields: list[str],
+        array_delimiters: list[str],
         stop_on_invalid_id: bool = False,
     ) -> pd.Series | pd.DataFrame:
         """
@@ -55,7 +55,7 @@ class Normalizer:
             Normalization results as a pd.Series (for single entity) or pd.DataFrame (for multiple entities)
             Includes: curies, curies_provided, curies_assigned, invalid_ids, invalid_ids_provided, invalid_ids_assigned
         """
-        logging.debug(f"Beginning ID normalization step..")
+        logging.debug("Beginning ID normalization step..")
 
         if isinstance(item, pd.DataFrame):
             # Normalize all entities in the dataframe
@@ -72,9 +72,9 @@ class Normalizer:
 
     def _normalize_entity(
         self,
-        entity: pd.Series | Dict[str, Any],
-        provided_id_fields: List[str],
-        array_delimiters: List[str],
+        entity: pd.Series | dict[str, Any],
+        provided_id_fields: list[str],
+        array_delimiters: list[str],
         stop_on_invalid_id: bool = False,
     ) -> pd.Series:
         """
@@ -91,7 +91,7 @@ class Normalizer:
         """
         # Load/clean the provided and assigned local IDs for this item
         # Parse any delimited strings (multiple identifiers in one string)
-        provided_ids: Dict[str | tuple, Any] = {
+        provided_ids: dict[str | tuple, Any] = {
             id_field: (
                 self._parse_delimited_string(entity[id_field], array_delimiters)
                 if array_delimiters
@@ -102,7 +102,7 @@ class Normalizer:
         }
         assigned_ids = entity.get("assigned_ids", dict())
 
-        assigned_ids_flat: Dict[str, Set[Any]] = defaultdict(set)
+        assigned_ids_flat: dict[str, set[Any]] = defaultdict(set)
         for annotator, annotator_assigned_ids in assigned_ids.items():
             for vocab, local_ids_dict in annotator_assigned_ids.items():
                 assigned_ids_flat[vocab] |= set(local_ids_dict)
@@ -131,8 +131,8 @@ class Normalizer:
         )
 
     def get_curies(
-        self, local_ids_dict: Dict[Any, Any], stop_on_invalid_id: bool = False
-    ) -> Tuple[Dict[str, str], Dict[str | tuple, List[str]]]:
+        self, local_ids_dict: dict[Any, Any], stop_on_invalid_id: bool = False
+    ) -> tuple[dict[str, str], dict[str | tuple, list[str]]]:
         """
         Convert local IDs to curies for all fields in dictionary.
 
@@ -165,7 +165,7 @@ class Normalizer:
                         invalid_ids[id_field_name].append(local_id)
         return curies, dict(invalid_ids)
 
-    def determine_vocab(self, id_field_name: str) -> Set[str]:
+    def determine_vocab(self, id_field_name: str) -> set[str]:
         """
         Determine which vocabulary corresponds to an ID field/column name.
 
@@ -225,7 +225,7 @@ class Normalizer:
                 logging.error(error_message)
                 raise ValueError(error_message)
 
-    def is_valid_id(self, local_id: str, vocab_name_cleaned: str) -> Tuple[bool, str]:
+    def is_valid_id(self, local_id: str, vocab_name_cleaned: str) -> tuple[bool, str]:
         """
         Validate local ID for specified vocabulary.
 
@@ -248,8 +248,8 @@ class Normalizer:
         return validator(local_id), local_id
 
     def _construct_curie(
-        self, local_id: str, vocab_name_cleaned: str | List[str], stop_on_failure: bool = False
-    ) -> Tuple[str, str]:
+        self, local_id: str, vocab_name_cleaned: str | list[str], stop_on_failure: bool = False
+    ) -> tuple[str, str]:
         """
         Construct standardized curie from local ID and vocabulary.
 
@@ -263,7 +263,7 @@ class Normalizer:
         """
         # First, if this is a proper curie - remove its prefix
         local_id = local_id.split(":")[1] if ":" in local_id and not local_id.startswith("http") else local_id
-        # Construct a standardized curie for the given local ID and vocabulary (or list of vocabularies; first valid kept)
+        # Construct a standardized curie for the given local ID and vocab (or list of vocabs; first valid kept)
         prefixes_lowercase = [vocab_name_cleaned] if isinstance(vocab_name_cleaned, str) else vocab_name_cleaned
         curie = ""
         iri = ""
@@ -290,7 +290,7 @@ class Normalizer:
         return curie, iri
 
     @staticmethod
-    def _parse_delimited_string(value: Any, array_delimiters: List[str]) -> Any:
+    def _parse_delimited_string(value: Any, array_delimiters: list[str]) -> Any:
         if isinstance(value, str):
             return [local_id for local_id in re.split(f"[{''.join(array_delimiters)}]", value)]
         else:

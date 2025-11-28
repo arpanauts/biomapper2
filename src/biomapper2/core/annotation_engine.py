@@ -6,13 +6,13 @@ Queries external APIs or uses other creative approaches to retrieve additional i
 
 import logging
 from copy import deepcopy
-from typing import Dict, Any, List, Set, Optional, Literal
+from typing import Any, Literal
 
 import pandas as pd
 
-from .annotators.kestrel_text import KestrelTextSearchAnnotator
-from .annotators.base import BaseAnnotator
 from ..utils import AssignedIDsDict
+from .annotators.base import BaseAnnotator
+from .annotators.kestrel_text import KestrelTextSearchAnnotator
 
 
 class AnnotationEngine:
@@ -24,9 +24,9 @@ class AnnotationEngine:
 
     def annotate(
         self,
-        item: pd.Series | Dict[str, Any] | pd.DataFrame,
+        item: pd.Series | dict[str, Any] | pd.DataFrame,
         name_field: str,
-        provided_id_fields: List[str],
+        provided_id_fields: list[str],
         entity_type: str,
         mode: Literal["all", "missing", "none"] = "missing",
     ) -> pd.DataFrame | pd.Series:
@@ -44,14 +44,15 @@ class AnnotationEngine:
                 - 'none': Skip annotation entirely (returns empty)
 
         Returns:
-            AssignedIDsDict (in a named Series) for single entity, and in a single-column pd.DataFrame for multiple entities
+            AssignedIDsDict (in a named Series) for single entity, and in a single-column
+            pd.DataFrame for multiple entities.
         """
         # Validate mode
         valid_modes = {"all", "missing", "none"}
         if mode not in valid_modes:
             raise ValueError(f"Invalid mode '{mode}'. Must be one of: {valid_modes}")
 
-        logging.debug(f"Beginning annotation step..")
+        logging.debug("Beginning annotation step..")
         entity_type_cleaned = "".join(c for c in entity_type.lower() if c.isalpha())
 
         # Skip annotation if user requested it
@@ -65,7 +66,7 @@ class AnnotationEngine:
         if annotators:
             logging.debug(f"Using annotators: {annotators}")
         else:
-            logging.warning(f"Did not identify any annotators to use for input item. Proceeding without assigned IDs.")
+            logging.warning("Did not identify any annotators to use for input item. Proceeding without assigned IDs.")
             return self._get_empty_assigned_ids(item)
 
         # Get annotations using selected annotators
@@ -76,7 +77,7 @@ class AnnotationEngine:
 
     # ------------------------------------- Helper methods --------------------------------------- #
 
-    def _select_annotators(self, entity_type_cleaned: str) -> List[BaseAnnotator]:
+    def _select_annotators(self, entity_type_cleaned: str) -> list[BaseAnnotator]:
         """Select appropriate annotators based on entity type."""
         annotators = []
         if entity_type_cleaned in {"metabolite", "smallmolecule", "lipid"}:
@@ -87,7 +88,7 @@ class AnnotationEngine:
         return annotators
 
     def _annotate_dataframe(
-        self, df: pd.DataFrame, name_field: str, provided_id_fields: List[str], mode: str, annotators: List
+        self, df: pd.DataFrame, name_field: str, provided_id_fields: list[str], mode: str, annotators: list
     ) -> pd.DataFrame:
         """Annotate an entire DataFrame. Returns a single-column DataFrame containing AssignedIDsDicts."""
         if mode == "missing":
@@ -124,11 +125,11 @@ class AnnotationEngine:
 
     def _annotate_single(
         self,
-        item: pd.Series | Dict[str, Any],
+        item: pd.Series | dict[str, Any],
         name_field: str,
-        provided_id_fields: List[str],
+        provided_id_fields: list[str],
         mode: str,
-        annotators: List,
+        annotators: list,
     ) -> pd.Series:
         """Annotate a single entity. Returns named series containing AssignedIDsDict."""
         # If user requested it, skip entities that have any provided IDs
@@ -179,7 +180,7 @@ class AnnotationEngine:
 
         return result
 
-    def _get_empty_assigned_ids(self, item: pd.Series | Dict[str, Any] | pd.DataFrame) -> pd.DataFrame | pd.Series:
+    def _get_empty_assigned_ids(self, item: pd.Series | dict[str, Any] | pd.DataFrame) -> pd.DataFrame | pd.Series:
         """Return empty assigned_ids in appropriate format."""
         if isinstance(item, pd.DataFrame):
             return self._get_empty_assigned_ids_for_dataset(item)
@@ -193,6 +194,6 @@ class AnnotationEngine:
         return pd.DataFrame({"assigned_ids": empty_col})
 
     @staticmethod
-    def _get_empty_assigned_ids_for_entity(item: pd.Series | Dict[str, Any]) -> pd.Series:
+    def _get_empty_assigned_ids_for_entity(item: pd.Series | dict[str, Any]) -> pd.Series:
         # Return named Series with empty dict
         return pd.Series({"assigned_ids": {}})

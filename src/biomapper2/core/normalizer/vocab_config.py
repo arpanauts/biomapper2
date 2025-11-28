@@ -3,15 +3,15 @@
 import json
 import logging
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 import requests
 import yaml
 
-from . import validators, cleaners
+from . import cleaners, validators
 
 
-def load_prefix_info(biolink_version: str) -> Dict[str, Dict[str, str]]:
+def load_prefix_info(biolink_version: str) -> dict[str, dict[str, str]]:
     """
     Load Biolink model prefix map and add custom entries.
 
@@ -22,7 +22,10 @@ def load_prefix_info(biolink_version: str) -> Dict[str, Dict[str, str]]:
         Dictionary mapping lowercase prefixes to {prefix, iri}
     """
     logging.debug(f"Grabbing biolink prefix map for version: {biolink_version}")
-    url = f"https://raw.githubusercontent.com/biolink/biolink-model/refs/tags/v{biolink_version}/project/prefixmap/biolink-model-prefix-map.json"
+    url = (
+        f"https://raw.githubusercontent.com/biolink/biolink-model/refs/tags/v{biolink_version}/"
+        f"project/prefixmap/biolink-model-prefix-map.json"
+    )
     prefix_to_iri_map = _load_biolink_file(url, biolink_version)
 
     # Remove prefixes as needed
@@ -36,28 +39,20 @@ def load_prefix_info(biolink_version: str) -> Dict[str, Dict[str, str]]:
     prefix_to_iri_map["VESICLEPEDIA"] = "http://microvesicles.org/exp_summary?exp_id="
     prefix_to_iri_map["NDFRT"] = "http://purl.bioontology.org/ontology/NDFRT/"
     prefix_to_iri_map["BVBRC"] = "https://www.bv-brc.org/view/Genome/"
-    prefix_to_iri_map["GeoNames"] = (
-        "http://www.geonames.org/search.html?q="  # Note: this doesn't go exactly to page for item, but closest I could find
-    )
-    prefix_to_iri_map["NHANES"] = (
-        "https://dsld.od.nih.gov/label/"  # These IRIs work, but weirdly SPOKE's identifiers for these nodes don't match what they have..
-    )
-    prefix_to_iri_map["MIRDB"] = (
-        "https://mirdb.org/cgi-bin/mature_mir.cgi?name="  # Not sure if it's right to use a 'mature' iri like this for all...
-    )
+    # Note: below doesn't go exactly to page for item, but closest I could find
+    prefix_to_iri_map["GeoNames"] = "http://www.geonames.org/search.html?q="
+    # Below IRI works, but weirdly SPOKE's identifiers for these nodes don't match what they have..
+    prefix_to_iri_map["NHANES"] = "https://dsld.od.nih.gov/label/"
+    # Not sure if it's right to use a 'mature' iri like this for all...
+    prefix_to_iri_map["MIRDB"] = "https://mirdb.org/cgi-bin/mature_mir.cgi?name="
     prefix_to_iri_map["CYTOBAND"] = ""  # Haven't found good iri for these yet..
     prefix_to_iri_map["CHR"] = ""  # Country Health Rankings.. Haven't found good iri for these yet
     prefix_to_iri_map["AHRQ"] = ""  # AHRQ SDOH Database
     prefix_to_iri_map["HPS"] = ""  # Household Pulse Survey
-    prefix_to_iri_map["mirbase"] = (
-        "https://mirbase.org/hairpin/"  # Biolink has mirbase in here, but their iri doesn't work
-    )
-    prefix_to_iri_map["metacyc.pathway"] = (
-        "https://metacyc.org/pathway?orgid=META&id="  # Biolink has metacyc.reaction, but not pathway
-    )
-    prefix_to_iri_map["metacyc.ec"] = (
-        "https://biocyc.org/META/NEW-IMAGE?type=EC-NUMBER&object=EC-"  # Biolink has metacyc.reaction, but not ec (these are like provisional ec codes, not yet in explorenz)
-    )
+    prefix_to_iri_map["mirbase"] = "https://mirbase.org/hairpin/"  # Biolink has mirbase, but their iri doesn't work
+    # Note: Biolink has metacyc.reaction, but not pathway or ec
+    prefix_to_iri_map["metacyc.pathway"] = "https://metacyc.org/pathway?orgid=META&id="
+    prefix_to_iri_map["metacyc.ec"] = "https://biocyc.org/META/NEW-IMAGE?type=EC-NUMBER&object=EC-"
     prefix_to_iri_map["FIPS.PLACE"] = ""
     prefix_to_iri_map["FIPS.STATE"] = ""
     prefix_to_iri_map["PHARMVAR"] = ""  # This wants a number rather than the symbol..
@@ -80,7 +75,7 @@ def load_prefix_info(biolink_version: str) -> Dict[str, Dict[str, str]]:
     return vocab_info_map
 
 
-def load_validator_map() -> Dict[str, Dict[str, Any]]:
+def load_validator_map() -> dict[str, dict[str, Any]]:
     """
     Load vocabulary validator/cleaner function mappings.
 
@@ -198,6 +193,6 @@ def _load_biolink_file(url: str, biolink_version: str) -> dict:
             json.dump(response_json, cache_file, indent=2)
 
     # Read and return the cached JSON
-    with open(local_path, "r") as cache_file:
+    with open(local_path) as cache_file:
         contents = json.load(cache_file)
         return contents

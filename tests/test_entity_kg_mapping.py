@@ -2,10 +2,12 @@
 
 import json
 
+import pandas as pd
+
 from biomapper2.mapper import Mapper
 
 
-def print_entity(entity: dict):
+def print_entity(entity: dict | pd.Series):
     print(json.dumps(entity, indent=2))
 
 
@@ -37,6 +39,7 @@ def test_map_entity_preserves_input(shared_mapper: Mapper):
     )
 
     assert entity == original
+    assert isinstance(mapped_entity, dict)
     assert mapped_entity != entity  # Different object
 
 

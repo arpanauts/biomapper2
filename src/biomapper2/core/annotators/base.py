@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from typing import Optional, List
 
 import pandas as pd
 
@@ -12,7 +11,7 @@ class BaseAnnotator(ABC):  # Inherit from ABC
     slug: str = NotImplemented
 
     def prepare(
-        self, item: dict | pd.Series | pd.DataFrame, provided_id_fields: List[str]
+        self, item: dict | pd.Series | pd.DataFrame, provided_id_fields: list[str]
     ) -> dict | pd.Series | pd.DataFrame:
         """
         Prepare entity/entities before annotation. Override to customize.
@@ -30,9 +29,7 @@ class BaseAnnotator(ABC):  # Inherit from ABC
         return item
 
     @abstractmethod
-    def get_annotations(
-        self, entity: dict | pd.Series, name_field: str, cache: Optional[dict] = None
-    ) -> AssignedIDsDict:
+    def get_annotations(self, entity: dict | pd.Series, name_field: str, cache: dict | None = None) -> AssignedIDsDict:
         """
         Get annotations for a single entity.
 

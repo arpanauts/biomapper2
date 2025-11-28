@@ -5,17 +5,16 @@ Provides logging setup and mathematical helpers for metric calculations.
 """
 
 import logging
-from typing import Optional, Dict, Any
+from typing import Any
 
-import requests
 import pandas as pd
+import requests
 
-from .config import LOG_LEVEL, KESTREL_API_URL, KESTREL_API_KEY
-
+from .config import KESTREL_API_KEY, KESTREL_API_URL, LOG_LEVEL
 
 # Type alias for annotation results structure
 # Structure: {annotator: {vocabulary: {local_id: result_metadata_dict}}}
-AssignedIDsDict = Dict[str, Dict[str, Dict[str, Dict[str, Any]]]]
+AssignedIDsDict = dict[str, dict[str, dict[str, dict[str, Any]]]]
 
 
 def setup_logging():
@@ -33,7 +32,7 @@ def setup_logging():
         )
 
 
-def safe_divide(numerator, denominator) -> Optional[float]:
+def safe_divide(numerator, denominator) -> float | None:
     """
     Divide two numbers, returning None if denominator is zero.
 
@@ -58,7 +57,7 @@ def safe_divide(numerator, denominator) -> Optional[float]:
     return result
 
 
-def calculate_f1_score(precision: Optional[float], recall: Optional[float]) -> Optional[float]:
+def calculate_f1_score(precision: float | None, recall: float | None) -> float | None:
     """
     Calculate F1 score from precision and recall.
 
@@ -106,7 +105,7 @@ def kestrel_request(method: str, endpoint: str, **kwargs) -> Any:
         raise
 
 
-def merge_into_entity(entity: pd.Series | Dict[str, Any], series_to_merge: pd.Series) -> pd.Series | Dict[str, Any]:
+def merge_into_entity(entity: pd.Series | dict[str, Any], series_to_merge: pd.Series) -> pd.Series | dict[str, Any]:
     """Merge fields from series_to_merge into entity, returning the updated entity."""
     if isinstance(entity, pd.Series):
         return pd.concat([entity, series_to_merge])

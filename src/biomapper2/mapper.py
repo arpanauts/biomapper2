@@ -9,17 +9,16 @@ import ast
 import copy
 import json
 import logging
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple, Literal
+from typing import Any, Literal
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from .core.normalizer import Normalizer
 from .core.annotation_engine import AnnotationEngine
 from .core.linker import Linker
+from .core.normalizer import Normalizer
 from .core.resolver import Resolver
-from .utils import setup_logging, safe_divide, calculate_f1_score, merge_into_entity
+from .utils import calculate_f1_score, merge_into_entity, safe_divide, setup_logging
 
 setup_logging()
 
@@ -35,7 +34,7 @@ class Mapper:
     4. Resolution - resolve one-to-many mappings
     """
 
-    def __init__(self, biolink_version: Optional[str] = None):
+    def __init__(self, biolink_version: str | None = None):
         # Instantiate the mapping modules (should only be done once, up front)
         self.annotation_engine = AnnotationEngine()
         self.normalizer = Normalizer(biolink_version=biolink_version)
@@ -44,14 +43,14 @@ class Mapper:
 
     def map_entity_to_kg(
         self,
-        item: pd.Series | Dict[str, Any],
+        item: pd.Series | dict[str, Any],
         name_field: str,
-        provided_id_fields: List[str],
+        provided_id_fields: list[str],
         entity_type: str,
-        array_delimiters: Optional[List[str]] = None,
+        array_delimiters: list[str] | None = None,
         stop_on_invalid_id: bool = False,
         annotation_mode: Literal["all", "missing", "none"] = "missing",
-    ) -> pd.Series | Dict[str, Any]:
+    ) -> pd.Series | dict[str, Any]:
         """
         Map a single entity to knowledge graph nodes.
 
@@ -112,10 +111,10 @@ class Mapper:
         dataset_tsv_path: str,
         entity_type: str,
         name_column: str,
-        provided_id_columns: List[str],
-        array_delimiters: Optional[List[str]] = None,
+        provided_id_columns: list[str],
+        array_delimiters: list[str] | None = None,
         annotation_mode: Literal["all", "missing", "none"] = "missing",
-    ) -> Tuple[str, Dict[str, Any]]:
+    ) -> tuple[str, dict[str, Any]]:
         """
         Map all entities in a dataset to knowledge graph nodes.
 
@@ -183,7 +182,8 @@ class Mapper:
             )
 
         # Dump the final dataframe to a TSV
-        output_tsv_path = dataset_tsv_path.replace(".tsv", "_MAPPED.tsv")  # TODO: let this be configurable?
+        # TODO: let file output location be configurable? #11
+        output_tsv_path = dataset_tsv_path.replace(".tsv", "_MAPPED.tsv")
         logging.info(f"Dumping output TSV to {output_tsv_path}")
         df.to_csv(output_tsv_path, sep="\t", index=False)
 
@@ -191,7 +191,7 @@ class Mapper:
 
         return output_tsv_path, stats_summary
 
-    def analyze_dataset_mapping(self, results_tsv_path: str) -> Dict[str, Any]:
+    def analyze_dataset_mapping(self, results_tsv_path: str) -> dict[str, Any]:
         """
         Analyze dataset mapping results and generate summary statistics.
 
@@ -236,13 +236,13 @@ class Mapper:
         mapped_to_kg = df.kg_ids.apply(lambda x: len(x) > 0).sum()
         mapped_to_kg_provided = df.kg_ids_provided.apply(lambda x: len(x) > 0).sum()
         mapped_to_kg_assigned = df.kg_ids_assigned.apply(lambda x: len(x) > 0).sum()
-        mapped_to_kg_provided_and_assigned = df.apply(
+        mapped_to_kg_both = df.apply(
             lambda r: (len(r.kg_ids_provided) > 0) & (len(r.kg_ids_assigned) > 0), axis=1
         ).sum()
-        assigned_mappings_correct_per_provided = df.apply(
+        assigned_correct_per_provided = df.apply(
             lambda r: len(set(r.kg_ids_provided) & set(r.kg_ids_assigned)) > 0, axis=1
         ).sum()
-        assigned_mappings_correct_per_provided_chosen = (
+        assigned_correct_per_provided_chosen = (
             (df.chosen_kg_id_provided == df.chosen_kg_id_assigned)
             & df.chosen_kg_id_provided.notna()
             & df.chosen_kg_id_assigned.notna()
@@ -261,7 +261,7 @@ class Mapper:
         assert many_to_one_mappings <= multi_mappings
         assert multi_mappings + one_to_one_mappings == mapped_to_kg
         assert has_only_provided_ids + has_only_assigned_ids + has_both_provided_and_assigned_ids == has_valid_ids
-        assert assigned_mappings_correct_per_provided <= mapped_to_kg_provided
+        assert assigned_correct_per_provided <= mapped_to_kg_provided
 
         # Compile final stats summary
         stats = {
@@ -270,7 +270,7 @@ class Mapper:
             "mapped_to_kg": int(mapped_to_kg),
             "mapped_to_kg_provided": int(mapped_to_kg_provided),
             "mapped_to_kg_assigned": int(mapped_to_kg_assigned),
-            "mapped_to_kg_provided_and_assigned": int(mapped_to_kg_provided_and_assigned),
+            "mapped_to_kg_provided_and_assigned": int(mapped_to_kg_both),
             "one_to_one_mappings": int(one_to_one_mappings),
             "multi_mappings": int(multi_mappings),
             "one_to_many_mappings": int(one_to_many_mappings),
@@ -281,8 +281,8 @@ class Mapper:
             "has_only_provided_ids": int(has_only_provided_ids),
             "has_only_assigned_ids": int(has_only_assigned_ids),
             "has_both_provided_and_assigned_ids": int(has_both_provided_and_assigned_ids),
-            "assigned_mappings_correct_per_provided": int(assigned_mappings_correct_per_provided),
-            "assigned_mappings_correct_per_provided_chosen": int(assigned_mappings_correct_per_provided_chosen),
+            "assigned_mappings_correct_per_provided": int(assigned_correct_per_provided),
+            "assigned_mappings_correct_per_provided_chosen": int(assigned_correct_per_provided_chosen),
             "has_invalid_ids": int(has_invalid_ids),
             "has_invalid_ids_provided": int(has_invalid_ids_provided),
             "has_invalid_ids_assigned": int(has_invalid_ids_assigned),
@@ -291,15 +291,13 @@ class Mapper:
         }
 
         # Calculate performance stats for 'assigned' ids vs. provided
-        precision_per_provided = safe_divide(assigned_mappings_correct_per_provided, mapped_to_kg_provided_and_assigned)
-        recall_per_provided = safe_divide(assigned_mappings_correct_per_provided, mapped_to_kg_provided)
-        precision_per_provided_chosen = safe_divide(
-            assigned_mappings_correct_per_provided_chosen, mapped_to_kg_provided_and_assigned
-        )
-        recall_per_provided_chosen = safe_divide(assigned_mappings_correct_per_provided_chosen, mapped_to_kg_provided)
+        precision_per_provided = safe_divide(assigned_correct_per_provided, mapped_to_kg_both)
+        recall_per_provided = safe_divide(assigned_correct_per_provided, mapped_to_kg_provided)
+        precision_per_provided_chosen = safe_divide(assigned_correct_per_provided_chosen, mapped_to_kg_both)
+        recall_per_provided_chosen = safe_divide(assigned_correct_per_provided_chosen, mapped_to_kg_provided)
 
         # Compile performance stats
-        performance: Dict[str, Any] = {
+        performance: dict[str, Any] = {
             "overall": {
                 "coverage": safe_divide(mapped_to_kg, total_items),
                 "coverage_explanation": f"{mapped_to_kg} / {total_items}",
@@ -309,15 +307,15 @@ class Mapper:
                 "coverage_explanation": f"{mapped_to_kg_assigned} / {total_items}",
                 "per_provided_ids": {
                     "precision": precision_per_provided,
-                    "precision_explanation": f"{assigned_mappings_correct_per_provided} / {mapped_to_kg_provided_and_assigned}",
+                    "precision_explanation": f"{assigned_correct_per_provided} / {mapped_to_kg_both}",
                     "recall": recall_per_provided,
-                    "recall_explanation": f"{assigned_mappings_correct_per_provided} / {mapped_to_kg_provided}",
+                    "recall_explanation": f"{assigned_correct_per_provided} / {mapped_to_kg_provided}",
                     "f1_score": calculate_f1_score(precision_per_provided, recall_per_provided),
                     "after_resolving_one_to_manys": {
                         "precision": precision_per_provided_chosen,
-                        "precision_explanation": f"{assigned_mappings_correct_per_provided_chosen} / {mapped_to_kg_provided_and_assigned}",
+                        "precision_explanation": f"{assigned_correct_per_provided_chosen} / {mapped_to_kg_both}",
                         "recall": recall_per_provided_chosen,
-                        "recall_explanation": f"{assigned_mappings_correct_per_provided_chosen} / {mapped_to_kg_provided}",
+                        "recall_explanation": f"{assigned_correct_per_provided_chosen} / {mapped_to_kg_provided}",
                         "f1_score": calculate_f1_score(precision_per_provided_chosen, recall_per_provided_chosen),
                     },
                 },
@@ -326,15 +324,14 @@ class Mapper:
 
         # Do evaluation vs. groundtruth, if available
         if "kg_ids_groundtruth" in df:
-            assert (
-                df.kg_ids_groundtruth.notnull().all()
-            )  # TODO: adjust later so we don't have to enforce this.. (just use rows w/ groundtruth mappings available)
+            # TODO: adjust later so we don't have to enforce this.. (just use rows w/ groundtruth mappings available)
+            assert df.kg_ids_groundtruth.notnull().all()
             canonical_map = self.linker.get_kg_ids(list(set(df.kg_ids_groundtruth.explode().dropna())))
             df["kg_ids_groundtruth_canonical"] = df.apply(
                 lambda r: [canonical_map[kg_id] for kg_id in r.kg_ids_groundtruth], axis=1
             )
 
-            # TODO: can we require more than set intersection to count this as 'correct'? requiring equivalence might be complicated..
+            # TODO: can we require more than set intersection to count this as 'correct'? might be complicated..
             mappings_correct_per_groundtruth = df.apply(
                 lambda r: len(set(r.kg_ids) & set(r.kg_ids_groundtruth_canonical)) > 0, axis=1
             ).sum()

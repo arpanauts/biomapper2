@@ -6,7 +6,7 @@ Queries the knowledge graph API to find canonical node IDs for normalized curies
 
 import logging
 from collections import defaultdict
-from typing import Dict, Any, List, Optional
+from typing import Any
 
 import pandas as pd
 
@@ -16,7 +16,7 @@ from ..utils import kestrel_request
 class Linker:
     """Links normalized curies to knowledge graph node IDs."""
 
-    def link(self, item: pd.Series | Dict[str, Any] | pd.DataFrame) -> pd.Series | pd.DataFrame:
+    def link(self, item: pd.Series | dict[str, Any] | pd.DataFrame) -> pd.Series | pd.DataFrame:
         """
         Link entity curies to knowledge graph node IDs.
 
@@ -27,7 +27,7 @@ class Linker:
             Named Series for single entity or DataFrame for multiple entities,
             containing fields: kg_ids, kg_ids_provided, kg_ids_assigned
         """
-        logging.debug(f"Beginning link step (curies-->KG)..")
+        logging.debug("Beginning link step (curies-->KG)..")
 
         if isinstance(item, pd.DataFrame):
             return self._link_dataframe(item)
@@ -60,7 +60,7 @@ class Linker:
         )
 
     def _link_entity(
-        self, entity: pd.Series | Dict[str, Any], curie_to_kg_id_cache: Optional[Dict[str, str]] = None
+        self, entity: pd.Series | dict[str, Any], curie_to_kg_id_cache: dict[str, str] | None = None
     ) -> pd.Series:
         """
         Link a single entity's curies to knowledge graph node IDs.
@@ -82,7 +82,7 @@ class Linker:
         return pd.Series({"kg_ids": kg_ids, "kg_ids_provided": kg_ids_provided, "kg_ids_assigned": kg_ids_assigned})
 
     @staticmethod
-    def get_kg_ids(curies: List[str]) -> Dict[str, str]:
+    def get_kg_ids(curies: list[str]) -> dict[str, str]:
         """
         Query knowledge graph API for canonical node IDs (in bulk).
 
@@ -94,7 +94,8 @@ class Linker:
         """
         curie_to_kg_id_map = dict()
         if curies:
-            # Get the canonical curies from the KG  # TODO: expose streamlined get_canonical_ids dict endpoint in kestrel
+            # Get the canonical curies from the KG
+            # TODO: update to use bulk get_canonical_ids endpoint in kestrel once available
             results = kestrel_request("POST", "get-nodes", json={"curies": curies})
 
             curie_to_kg_id_map = {input_curie: node["id"] for input_curie, node in results.items() if node}
@@ -103,8 +104,8 @@ class Linker:
 
     @staticmethod
     def _format_kg_id_fields(
-        entity: pd.Series | Dict[str, Any], curie_to_kg_id_map: Dict[str, str]
-    ) -> tuple[Dict[str, List[str]], Dict[str, List[str]], Dict[str, List[str]]]:
+        entity: pd.Series | dict[str, Any], curie_to_kg_id_map: dict[str, str]
+    ) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, list[str]]]:
         """
         Organize KG IDs by source (overall, provided, assigned) and record their corresponding curie 'votes'.
 
@@ -126,7 +127,7 @@ class Linker:
         return kg_ids, kg_ids_provided, kg_ids_assigned
 
     @staticmethod
-    def _reverse_curie_map(curie_map: Dict[str, str], curie_subset: List[str]) -> Dict[str, List[str]]:
+    def _reverse_curie_map(curie_map: dict[str, str], curie_subset: list[str]) -> dict[str, list[str]]:
         """
         Reverse curie-to-kg-id mapping for a subset of curies.
 
