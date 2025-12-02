@@ -1,8 +1,50 @@
-.idea
+# Python
 __pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+
+# uv
+.uv/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb  # Optional: if notebooks shouldn't be tracked
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
 .DS_Store
+Thumbs.db
 
+# Data (common for biomedical projects)
+data/raw/
+data/processed/
+*.csv
+*.tsv
+*.parquet
+*.h5
+data/**/*.json
+
+# Allow our designated example/groundtruth datasets
+!data/examples/metabolites_synthetic.tsv
+!data/examples/metabolites_synthetic_partial_provided.tsv
+!data/examples/olink_protein_metadata.tsv
+!data/groundtruth/diseases_handcrafted.tsv
+
+# Other app-specific items
 cache/
-
-# Ignore results files..
-data/**/*_MAPPED*
+.env
