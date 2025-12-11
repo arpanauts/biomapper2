@@ -19,6 +19,16 @@ jobs:
       (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
 
     steps:
+      - name: Verify token exists
+        run: |
+          if [ -z "${{ secrets.MIRROR_PUSH_TOKEN }}" ]; then
+            echo "::error::MIRROR_PUSH_TOKEN secret is empty or not set"
+            exit 1
+          fi
+          echo "Token is configured (length: ${#MIRROR_PUSH_TOKEN} chars)"
+        env:
+          MIRROR_PUSH_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
+
       - name: Checkout repository
         uses: actions/checkout@v5
         with:
@@ -26,7 +36,10 @@ jobs:
 
       - name: Push to mirror
         run: |
-          git remote add mirror https://x-access-token:${{ secrets.MIRROR_PUSH_TOKEN }}@github.com/arpanauts/biomapper2.git
+          # Remove credential helper set by actions/checkout (uses GITHUB_TOKEN)
+          git config --unset-all http.https://github.com/.extraheader || true
+          # Push using PAT in URL
+          git remote add mirror https://x-access-token:${MIRROR_PUSH_TOKEN}@github.com/arpanauts/biomapper2.git
           git push mirror main --force
         env:
           MIRROR_PUSH_TOKEN: ${{ secrets.MIRROR_PUSH_TOKEN }}
