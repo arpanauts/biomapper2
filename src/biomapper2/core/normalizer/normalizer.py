@@ -4,6 +4,7 @@ Main normalization logic for converting local IDs to Biolink-standard curies.
 Validates local identifiers and constructs standardized curies using Biolink model prefixes.
 """
 
+import ast
 import logging
 import re
 import sys
@@ -292,6 +293,18 @@ class Normalizer:
     @staticmethod
     def _parse_delimited_string(value: Any, array_delimiters: list[str]) -> Any:
         if isinstance(value, str):
+            # Check for Python list/tuple/set formats
+            if (
+                (value.startswith("[") and value.endswith("]"))
+                or (value.startswith("(") and value.endswith(")"))
+                or (value.startswith("{") and value.endswith("}"))
+            ):
+                try:
+                    parsed = ast.literal_eval(value)
+                    if isinstance(parsed, (list, tuple, set)):
+                        return list(parsed)
+                except (ValueError, SyntaxError):
+                    pass  # Fall through to delimiter-based parsing
             return [local_id for local_id in re.split(f"[{''.join(array_delimiters)}]", value)]
         else:
             return value
