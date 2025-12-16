@@ -5,7 +5,7 @@ Provides logging setup and mathematical helpers for metric calculations.
 """
 
 import logging
-from typing import Any
+from typing import Any, TypeGuard
 
 import pandas as pd
 import requests
@@ -30,6 +30,11 @@ def setup_logging():
         logging.basicConfig(
             level=getattr(logging, level), format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
         )
+
+
+def text_is_not_empty(value: Any) -> TypeGuard[str]:
+    """Check if a name/text field value is a valid non-empty string."""
+    return isinstance(value, str) and value.strip() != ""
 
 
 def safe_divide(numerator, denominator) -> float | None:
