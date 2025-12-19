@@ -2,7 +2,13 @@
 
 ![CI](https://github.com/Phenome-Health/biomapper2/actions/workflows/ci.yml/badge.svg)
 
-Unified toolkit for multiomics data harmonization, from entity linking and identifier standardization to knowledge graph mapping and cross-dataset alignment.
+This is a package for mapping **biomedical entities** to the KRAKEN knowledge graph, whether starting from text names or vocabulary/ontology IDs (local IDs or CURIEs).
+
+It does both **entity linking** (text name → CURIE) and **entity resolution** (ID/CURIE → equivalent CURIEs, by leveraging the CURIE equivalencies in the KRAKEN knowledge graph).
+
+It supports both **single-entity** lookups and **dataset-level** batch processing.
+
+⚠️ **Note**: This package is in active development. Feedback and issues welcome!
 
 ## Setup
 
