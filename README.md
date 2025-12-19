@@ -4,9 +4,13 @@
 
 This is a package for mapping **biomedical entities** to the KRAKEN knowledge graph, whether starting from text names or vocabulary/ontology IDs (local IDs or CURIEs).
 
-It does both **entity linking** (text name → CURIE) and **entity resolution** (ID/CURIE → equivalent CURIEs, by leveraging the CURIE equivalencies in the KRAKEN knowledge graph).
+It supports both **single-entity** lookups and **dataset-level** batch processing, and does:
 
-It supports both **single-entity** lookups and **dataset-level** batch processing.
+1. **entity linking** (text name → CURIE)
+2. **ID normalization** (messy local ID → CURIE)
+3. **entity resolution** (CURIE → canonical CURIE, by leveraging the CURIE equivalencies in the KRAKEN knowledge graph)
+
+All CURIEs are represented in [Biolink](https://github.com/biolink/biolink-model/tree/master/src/biolink_model/prefixmaps)-standard format.
 
 ⚠️ **Note**: This package is in active development. Feedback and issues welcome!
 
