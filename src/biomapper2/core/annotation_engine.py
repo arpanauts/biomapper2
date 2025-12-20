@@ -49,7 +49,6 @@ class AnnotationEngine:
             AssignedIDsDict (in a named Series) for single entity, and in a single-column
             pd.DataFrame for multiple entities.
         """
-        # Validate mode
         valid_modes = {"all", "missing", "none"}
         if mode not in valid_modes:
             raise ValueError(f"Invalid mode '{mode}'. Must be one of: {valid_modes}")
@@ -84,9 +83,10 @@ class AnnotationEngine:
         annotators: list[BaseAnnotator] = []
         if entity_type_cleaned in {"metabolite", "smallmolecule", "lipid"}:
             annotators.append(self.metabolomics_workbench_annotator)
-        if not annotators:
-            # Back up to using a text search (this is a PLACEHOLDER, should not be fallback long-term)
-            annotators.append(self.kestrel_text_search_annotator)
+
+        # Always include fallback annotator (temp: orchestration will become more advanced later)
+        annotators.append(self.kestrel_text_search_annotator)
+
         return annotators
 
     def _annotate_dataframe(
