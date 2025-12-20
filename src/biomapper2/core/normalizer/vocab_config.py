@@ -246,6 +246,8 @@ def load_validator_map() -> dict[str, dict[str, Any]]:
         "smpdb": {"validator": validators.is_smpdb_id},
         "kegg.enzyme": {"validator": validators.is_ec_id},  # Reuse existing EC validator
         "kegg.glycan": {"validator": validators.is_kegg_glycan_id},
+        "kegg": {"validator": validators.is_kegg_generic_id},  # Generic KEGG pathway/compound IDs
+        "chembl.mechanism": {"validator": validators.is_chembl_mechanism_id},
         # --- Tier 2: Anatomy/Phenotype Ontologies ---
         "aeo": {"validator": validators.is_seven_digit_id},
         "bspo": {"validator": validators.is_seven_digit_id},
@@ -266,6 +268,8 @@ def load_validator_map() -> dict[str, dict[str, Any]]:
         "ehdaa2": {"validator": validators.is_seven_digit_id},
         "mod": {"validator": validators.is_mod_id},
         "mi": {"validator": validators.is_mi_id},
+        "oba": {"validator": validators.is_oba_id},  # Ontology for Biomedical Annotations
+        "obo": {"validator": validators.is_obo_id},  # Open Biological Ontology cross-refs
         # --- Tier 3: Specialized/Medical ---
         "pathwhiz": {"validator": validators.is_pathwhiz_id},
         "pathwhiz.bound": {"validator": validators.is_numeric_id},
@@ -289,11 +293,6 @@ def load_validator_map() -> dict[str, dict[str, Any]]:
         "foodon": {"validator": validators.is_foodon_id},
         "psy": {"validator": validators.is_numeric_id},
         "ttd.target": {"validator": validators.is_ttd_target_id},
-        # --- Final 4: Edge case prefixes ---
-        "kegg": {"validator": validators.is_kegg_generic_id},  # Generic KEGG pathway IDs
-        "chembl.mechanism": {"validator": validators.is_chembl_mechanism_id},
-        "oba": {"validator": validators.is_oba_id},  # Ontology for Biomedical Annotations
-        "obo": {"validator": validators.is_obo_id},  # Open Biological Ontology cross-refs
         # --- Tier 4: Model Organism Databases ---
         "fb": {"validator": validators.is_flybase_id, "aliases": ["flybase"]},
         "wb": {"validator": validators.is_wormbase_gene_id, "aliases": ["wormbase"]},
