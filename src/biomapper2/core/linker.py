@@ -92,15 +92,12 @@ class Linker:
         Returns:
             Dictionary mapping curies to canonical KG node IDs
         """
-        curie_to_kg_id_map = dict()
         if curies:
-            # Get the canonical curies from the KG
-            # TODO: update to use bulk get_canonical_ids endpoint in kestrel once available
-            results = kestrel_request("POST", "get-nodes", json={"curies": curies})
+            results = kestrel_request("POST", "canonicalize", json={"curies": curies})
+        else:
+            results = dict()
 
-            curie_to_kg_id_map = {input_curie: node["id"] for input_curie, node in results.items() if node}
-
-        return curie_to_kg_id_map
+        return results
 
     @staticmethod
     def _format_kg_id_fields(
