@@ -240,7 +240,11 @@ class Mapper:
 
         # Create reusable masks
         has_valid_ids_mask = df.curies.apply(len) > 0
+        has_valid_ids_provided_mask = df.curies_provided.apply(len) > 0
+        has_valid_ids_assigned_mask = df.curies_assigned.apply(lambda x: any(len(curies) > 0 for curies in x.values()))
         mapped_to_kg_mask = df.kg_ids.apply(len) > 0
+        mapped_to_kg_provided_mask = df.kg_ids_provided.apply(len) > 0
+        mapped_to_kg_assigned_mask = df.kg_ids_assigned.apply(lambda x: any(len(kg_ids) > 0 for kg_ids in x.values()))
         not_mapped_to_kg_mask = ~mapped_to_kg_mask
         one_to_many_mask = df.kg_ids.apply(lambda x: len(x) > 1)
         many_to_one_mask = df.chosen_kg_id.notna() & df.chosen_kg_id.duplicated(keep=False)
@@ -248,36 +252,41 @@ class Mapper:
             lambda r: len(r.invalid_ids_provided) > 0 or len(r.invalid_ids_assigned) > 0,
             axis=1,
         )
+        has_invalid_ids_provided_mask = df.invalid_ids_provided.apply(lambda x: len(x) > 0)
+        has_invalid_ids_assigned_mask = df.invalid_ids_assigned.apply(lambda x: len(x) > 0)
+        has_no_ids_mask = ~has_valid_ids_mask & ~has_invalid_ids_mask
+        assigned_correct_per_provided_mask = df.apply(
+            lambda r: len(
+                set(r.kg_ids_provided.keys())
+                & set().union(*(annotator_kg_ids.keys() for annotator_kg_ids in r.kg_ids_assigned.values()))
+            )
+            > 0,
+            axis=1,
+        )
+        assigned_correct_per_provided_chosen_mask = (
+            (df.chosen_kg_id_provided == df.chosen_kg_id_assigned)
+            & df.chosen_kg_id_provided.notna()
+            & df.chosen_kg_id_assigned.notna()
+        )
 
         # Calculate some summary stats
         total_items = len(df)
         has_valid_ids = has_valid_ids_mask.sum()
-        has_valid_ids_provided = df.curies_provided.apply(lambda x: len(x) > 0).sum()
-        has_valid_ids_assigned = df.curies_assigned.apply(lambda x: any(len(curies) > 0 for curies in x.values())).sum()
+        has_valid_ids_provided = has_valid_ids_provided_mask.sum()
+        has_valid_ids_assigned = has_valid_ids_assigned_mask.sum()
         has_only_provided_ids = has_valid_ids - has_valid_ids_assigned
         has_only_assigned_ids = has_valid_ids - has_valid_ids_provided
         has_both_provided_and_assigned_ids = has_valid_ids - has_only_provided_ids - has_only_assigned_ids
-        has_no_ids = df.apply(
-            lambda r: len(r.curies) == 0 and len(r.invalid_ids_provided) == 0 and len(r.invalid_ids_assigned) == 0,
-            axis=1,
-        ).sum()
+        has_no_ids = has_no_ids_mask.sum()
         has_invalid_ids = has_invalid_ids_mask.sum()
-        has_invalid_ids_provided = df.invalid_ids_provided.apply(lambda x: len(x) > 0).sum()
-        has_invalid_ids_assigned = df.invalid_ids_assigned.apply(lambda x: len(x) > 0).sum()
+        has_invalid_ids_provided = has_invalid_ids_provided_mask.sum()
+        has_invalid_ids_assigned = has_invalid_ids_assigned_mask.sum()
         mapped_to_kg = mapped_to_kg_mask.sum()
-        mapped_to_kg_provided = df.kg_ids_provided.apply(lambda x: len(x) > 0).sum()
-        mapped_to_kg_assigned = df.kg_ids_assigned.apply(lambda x: len(x) > 0).sum()
-        mapped_to_kg_both = df.apply(
-            lambda r: (len(r.kg_ids_provided) > 0) & (len(r.kg_ids_assigned) > 0), axis=1
-        ).sum()
-        assigned_correct_per_provided = df.apply(
-            lambda r: len(set(r.kg_ids_provided) & set(r.kg_ids_assigned)) > 0, axis=1
-        ).sum()
-        assigned_correct_per_provided_chosen = (
-            (df.chosen_kg_id_provided == df.chosen_kg_id_assigned)
-            & df.chosen_kg_id_provided.notna()
-            & df.chosen_kg_id_assigned.notna()
-        ).sum()
+        mapped_to_kg_provided = mapped_to_kg_provided_mask.sum()
+        mapped_to_kg_assigned = mapped_to_kg_assigned_mask.sum()
+        mapped_to_kg_both = (mapped_to_kg_provided_mask & mapped_to_kg_assigned_mask).sum()
+        assigned_correct_per_provided = assigned_correct_per_provided_mask.sum()
+        assigned_correct_per_provided_chosen = assigned_correct_per_provided_chosen_mask.sum()
         has_invalid_ids_and_not_mapped_to_kg = (has_invalid_ids_mask & not_mapped_to_kg_mask).sum()
         one_to_many_mappings = one_to_many_mask.sum()
         many_to_one_mappings = many_to_one_mask.sum()

@@ -99,10 +99,9 @@ class Linker:
 
         return results
 
-    @staticmethod
     def _format_kg_id_fields(
-        entity: pd.Series | dict[str, Any], curie_to_kg_id_map: dict[str, str]
-    ) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, list[str]]]:
+        self, entity: pd.Series | dict[str, Any], curie_to_kg_id_map: dict[str, str]
+    ) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, dict[str, list[str]]]]:
         """
         Organize KG IDs by source (overall, provided, assigned) and record their corresponding curie 'votes'.
 
@@ -117,9 +116,13 @@ class Linker:
         curies_provided = entity["curies_provided"]
         curies_assigned = entity["curies_assigned"]
 
-        kg_ids = Linker._reverse_curie_map(curie_to_kg_id_map, curie_subset=curies)
-        kg_ids_provided = Linker._reverse_curie_map(curie_to_kg_id_map, curie_subset=curies_provided)
-        kg_ids_assigned = Linker._reverse_curie_map(curie_to_kg_id_map, curie_subset=curies_assigned)
+        kg_ids = self._reverse_curie_map(curie_to_kg_id_map, curie_subset=curies)
+        kg_ids_provided = self._reverse_curie_map(curie_to_kg_id_map, curie_subset=curies_provided)
+
+        # Build KG IDs assigned in nested fashion (per annotator)
+        kg_ids_assigned = dict()
+        for annotator_slug, annotator_curies in curies_assigned.items():
+            kg_ids_assigned[annotator_slug] = self._reverse_curie_map(curie_to_kg_id_map, curie_subset=annotator_curies)
 
         return kg_ids, kg_ids_provided, kg_ids_assigned
 
@@ -137,7 +140,7 @@ class Linker:
         """
         reversed_dict = defaultdict(list)
         for curie in curie_subset:
-            if curie in curie_map:  # Curies that didn't match to a KG node won't be in the curie map
-                kg_id = curie_map[curie]
+            kg_id = curie_map.get(curie)
+            if kg_id:
                 reversed_dict[kg_id].append(curie)
         return dict(reversed_dict)
