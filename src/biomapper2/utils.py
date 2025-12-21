@@ -131,7 +131,7 @@ def calculate_f1_score(precision: float | None, recall: float | None) -> float |
     if precision is None or recall is None:
         return None
     else:
-        return safe_divide(2 * (precision * recall), (precision + recall))
+        return round(safe_divide(2 * (precision * recall), (precision + recall)), 4)
 
 
 # Kestrel API functions
