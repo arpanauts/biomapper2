@@ -176,11 +176,7 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
             "coverage": _calculate_coverage(mapped_to_kg, total_items),
             "coverage_explanation": f"{mapped_to_kg} / {total_items}",
         },
-        "assigned_ids": {
-            "coverage": _calculate_coverage(mapped_to_kg_assigned, total_items),
-            "coverage_explanation": f"{mapped_to_kg_assigned} / {total_items}",
-            **assigned_performance,
-        },
+        "assigned_ids": assigned_performance,
         "per_annotator": per_annotator_stats,
     }
 
