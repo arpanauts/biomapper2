@@ -225,7 +225,6 @@ class Mapper:
             "curies",
             "curies_provided",
             "curies_assigned",
-            "invalid_ids",
             "invalid_ids_provided",
             "invalid_ids_assigned",
             "kg_ids",
@@ -239,19 +238,33 @@ class Mapper:
         if "kg_ids_groundtruth" in df.columns:
             df.kg_ids_groundtruth = df.kg_ids_groundtruth.apply(ast.literal_eval)
 
+        # Create reusable masks
+        has_valid_ids_mask = df.curies.apply(len) > 0
+        mapped_to_kg_mask = df.kg_ids.apply(len) > 0
+        not_mapped_to_kg_mask = ~mapped_to_kg_mask
+        one_to_many_mask = df.kg_ids.apply(lambda x: len(x) > 1)
+        many_to_one_mask = df.chosen_kg_id.notna() & df.chosen_kg_id.duplicated(keep=False)
+        has_invalid_ids_mask = df.apply(
+            lambda r: len(r.invalid_ids_provided) > 0 or len(r.invalid_ids_assigned) > 0,
+            axis=1,
+        )
+
         # Calculate some summary stats
         total_items = len(df)
-        has_valid_ids = df.curies.apply(lambda x: len(x) > 0).sum()
+        has_valid_ids = has_valid_ids_mask.sum()
         has_valid_ids_provided = df.curies_provided.apply(lambda x: len(x) > 0).sum()
-        has_valid_ids_assigned = df.curies_assigned.apply(lambda x: len(x) > 0).sum()
+        has_valid_ids_assigned = df.curies_assigned.apply(lambda x: any(len(curies) > 0 for curies in x.values())).sum()
         has_only_provided_ids = has_valid_ids - has_valid_ids_assigned
         has_only_assigned_ids = has_valid_ids - has_valid_ids_provided
         has_both_provided_and_assigned_ids = has_valid_ids - has_only_provided_ids - has_only_assigned_ids
-        has_no_ids = ((df.curies.apply(len) == 0) & (df.invalid_ids.apply(len) == 0)).sum()
-        has_invalid_ids = df.invalid_ids.apply(lambda x: len(x) > 0).sum()
+        has_no_ids = df.apply(
+            lambda r: len(r.curies) == 0 and len(r.invalid_ids_provided) == 0 and len(r.invalid_ids_assigned) == 0,
+            axis=1,
+        ).sum()
+        has_invalid_ids = has_invalid_ids_mask.sum()
         has_invalid_ids_provided = df.invalid_ids_provided.apply(lambda x: len(x) > 0).sum()
         has_invalid_ids_assigned = df.invalid_ids_assigned.apply(lambda x: len(x) > 0).sum()
-        mapped_to_kg = df.kg_ids.apply(lambda x: len(x) > 0).sum()
+        mapped_to_kg = mapped_to_kg_mask.sum()
         mapped_to_kg_provided = df.kg_ids_provided.apply(lambda x: len(x) > 0).sum()
         mapped_to_kg_assigned = df.kg_ids_assigned.apply(lambda x: len(x) > 0).sum()
         mapped_to_kg_both = df.apply(
@@ -265,9 +278,7 @@ class Mapper:
             & df.chosen_kg_id_provided.notna()
             & df.chosen_kg_id_assigned.notna()
         ).sum()
-        has_invalid_ids_and_not_mapped_to_kg = ((df.invalid_ids.apply(len) > 0) & (df.kg_ids.apply(len) == 0)).sum()
-        one_to_many_mask = df.kg_ids.apply(lambda x: len(x) > 1)
-        many_to_one_mask = df.chosen_kg_id.notna() & df.chosen_kg_id.duplicated(keep=False)
+        has_invalid_ids_and_not_mapped_to_kg = (has_invalid_ids_mask & not_mapped_to_kg_mask).sum()
         one_to_many_mappings = one_to_many_mask.sum()
         many_to_one_mappings = many_to_one_mask.sum()
         multi_mappings = (one_to_many_mask | many_to_one_mask).sum()
@@ -376,27 +387,27 @@ class Mapper:
             json.dump(stats, stats_file, indent=2)
 
         # Record the items that had valid curies but that weren't in the KG, for easy reference
-        kg_misses = df[(df.curies.apply(len) > 0) & (df.kg_ids.apply(len) == 0)]
+        kg_misses = df[has_valid_ids_mask & not_mapped_to_kg_mask]
         kg_misses.to_csv(f"{results_filepath_root}_b_curie_misses.tsv", sep="\t")
 
         # Record the items that didn't get mapped to the KG, for easy reference
-        unmapped = df[df.kg_ids.apply(len) == 0]
+        unmapped = df[not_mapped_to_kg_mask]
         unmapped.to_csv(f"{results_filepath_root}_c_unmapped.tsv", sep="\t")
 
         # Record the items that DID map to the KG, for easy reference
-        mapped = df[df.kg_ids.apply(len) > 0]
+        mapped = df[mapped_to_kg_mask]
         mapped.to_csv(f"{results_filepath_root}_d_mapped.tsv", sep="\t")
 
         # Record the items with invalid IDs, for easy reference
-        invalid_ids = df[df.invalid_ids.apply(lambda x: len(x) > 0)]
-        invalid_ids.to_csv(f"{results_filepath_root}_e_invalid_ids.tsv", sep="\t")
+        invalid_ids_df = df[has_invalid_ids_mask]
+        invalid_ids_df.to_csv(f"{results_filepath_root}_e_invalid_ids.tsv", sep="\t")
 
         # Record the one-to-many items, for easy reference
-        one_to_many_items = df[df.kg_ids.apply(lambda x: len(x) > 1)]
+        one_to_many_items = df[one_to_many_mask]
         one_to_many_items.to_csv(f"{results_filepath_root}_f_one_to_many.tsv", sep="\t")
 
         # Record the many-to-one items, for easy reference
-        many_to_one_items = df[df.chosen_kg_id.notna() & df.chosen_kg_id.duplicated(keep=False)]
+        many_to_one_items = df[many_to_one_mask]
         many_to_one_items.to_csv(f"{results_filepath_root}_g_many_to_one.tsv", sep="\t")
 
         return stats

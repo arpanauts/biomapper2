@@ -104,29 +104,26 @@ class Normalizer:
         }
         assigned_ids = entity.get("assigned_ids", dict())
 
-        assigned_ids_flat: dict[str, set[Any]] = defaultdict(set)
-        for annotator, annotator_assigned_ids in assigned_ids.items():
-            for vocab, local_ids_dict in annotator_assigned_ids.items():
-                assigned_ids_flat[vocab] |= set(local_ids_dict)
-
-        # Get curies for the provided/assigned IDs
+        # Get curies for the provided IDs
         curies_provided, invalid_ids_provided = self.get_curies(provided_ids, stop_on_invalid_id)
-        curies_assigned, invalid_ids_assigned = self.get_curies(assigned_ids_flat, stop_on_invalid_id)
 
-        # Form final result
-        curies = set(curies_provided) | set(curies_assigned)
-        invalid_ids = {
-            id_field: invalid_ids_provided.get(id_field, []) + invalid_ids_assigned.get(id_field, [])
-            for id_field in set(invalid_ids_provided) | set(invalid_ids_assigned)
-        }
+        # Get curies for the assigned IDs (per annotator, to track provenance)
+        curies_assigned, invalid_ids_assigned = dict(), dict()
+        for annotator_slug, annotator_assigned_ids in assigned_ids.items():
+            annotator_curies, annotator_invalid_ids = self.get_curies(annotator_assigned_ids, stop_on_invalid_id)
+            curies_assigned[annotator_slug] = list(annotator_curies)
+            if annotator_invalid_ids:
+                invalid_ids_assigned[annotator_slug] = annotator_invalid_ids
+
+        # Form final overall combined set of curies
+        curies = set(curies_provided) | set().union(*curies_assigned.values())
 
         # Return a named Series
         return pd.Series(
             {
                 "curies": list(curies),
                 "curies_provided": list(curies_provided),
-                "curies_assigned": list(curies_assigned),
-                "invalid_ids": invalid_ids,
+                "curies_assigned": curies_assigned,
                 "invalid_ids_provided": invalid_ids_provided,
                 "invalid_ids_assigned": invalid_ids_assigned,
             }
