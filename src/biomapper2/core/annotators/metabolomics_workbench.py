@@ -1,12 +1,15 @@
 """Metabolomics Workbench RefMet API annotator for metabolite entities."""
 
 import logging
-from collections import defaultdict
+from datetime import timedelta
 from typing import Any
 from urllib.parse import quote
 
 import pandas as pd
 import requests
+import requests_cache
+from requests.adapters import HTTPAdapter
+from urllib3 import Retry
 
 from ...utils import AssignedIDsDict
 from .base import BaseAnnotator
@@ -29,6 +32,22 @@ class MetabolomicsWorkbenchAnnotator(BaseAnnotator):
 
     # Only extract refmet_id - KRAKEN has all RefMet equivalencies
     API_FIELDS = ["refmet_id"]
+
+    def __init__(self):
+        self._session = requests_cache.CachedSession(
+            ".cache/metabolomics_workbench_http",
+            expire_after=timedelta(days=7),
+        )
+
+        # Add retry logic
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,  # waits 1s, 2s, 4s between retries
+            status_forcelist=[500, 502, 503, 504],
+            allowed_methods=["GET"],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy)
+        self._session.mount("https://", adapter)
 
     def get_annotations(
         self, entity: dict | pd.Series, name_field: str, category: str, cache: dict | None = None
@@ -93,10 +112,13 @@ class MetabolomicsWorkbenchAnnotator(BaseAnnotator):
         """
         url = f"{self.BASE_URL}/{quote(metabolite_name)}"
 
-        response = requests.get(url, timeout=30)
-        response.raise_for_status()
-
-        data = response.json()
+        try:
+            response = self._session.get(url, timeout=30)
+            response.raise_for_status()
+            data = response.json()
+        except requests.RequestException as e:
+            logging.warning(f"Failed to fetch RefMet data for '{metabolite_name}': {e}")
+            return None
 
         # /match endpoint returns dict with "-" values when no match found
         if isinstance(data, dict):

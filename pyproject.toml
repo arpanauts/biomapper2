@@ -12,6 +12,7 @@ dependencies = [
     "pyyaml>=6.0.3",
     "rdkit>=2025.9.1",
     "requests>=2.32.5",
+    "requests-cache>=1.2.1",
 ]
 
 [build-system]
