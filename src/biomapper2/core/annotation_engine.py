@@ -12,6 +12,7 @@ import pandas as pd
 
 from ..utils import AssignedIDsDict, get_descendants, initialize_biolink_model_toolkit, standardize_entity_type
 from .annotators.base import BaseAnnotator
+from .annotators.kestrel_hybrid import KestrelHybridSearchAnnotator
 from .annotators.kestrel_text import KestrelTextSearchAnnotator
 from .annotators.metabolomics_workbench import MetabolomicsWorkbenchAnnotator
 
@@ -23,6 +24,7 @@ class AnnotationEngine:
         """Initialize the annotation engine and set up available annotators."""
         self.kestrel_text_search_annotator = KestrelTextSearchAnnotator()
         self.metabolomics_workbench_annotator = MetabolomicsWorkbenchAnnotator()
+        self.kestrel_hybrid_search_annotator = KestrelHybridSearchAnnotator()
 
         self.bmt = initialize_biolink_model_toolkit(biolink_version)
 
@@ -92,7 +94,7 @@ class AnnotationEngine:
             annotators.append(self.metabolomics_workbench_annotator)
 
         # Always include fallback annotator (temp: orchestration will become more advanced later)
-        annotators.append(self.kestrel_text_search_annotator)
+        annotators.append(self.kestrel_hybrid_search_annotator)
 
         return category, annotators
 
