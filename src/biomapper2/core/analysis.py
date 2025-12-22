@@ -243,7 +243,7 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
         incorrect_per_provided.to_csv(f"{results_filepath_root}_h_incorrect_per_provided.tsv", sep="\t")
 
     if "assigned_correct_per_groundtruth" in df.columns:
-        incorrect_per_groundtruth = df[df.assigned_correct_per_provided.eq(False)]
+        incorrect_per_groundtruth = df[df.assigned_correct_per_groundtruth.eq(False)]
         incorrect_per_groundtruth.to_csv(f"{results_filepath_root}_i_incorrect_per_groundtruth.tsv", sep="\t")
 
     return stats
