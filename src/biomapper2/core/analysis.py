@@ -52,6 +52,25 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
             lambda r: [canonical_map[kg_id] for kg_id in r.kg_ids_groundtruth], axis=1
         )
 
+    # Add correctness columns (for later output)
+    df["assigned_correct_per_provided"] = df.apply(
+        lambda r: (
+            len(set(r.kg_ids_provided.keys()) & set(_get_all_assigned_kg_ids(r))) > 0
+            if len(r.kg_ids_provided) > 0 and len(_get_all_assigned_kg_ids(r)) > 0
+            else None
+        ),
+        axis=1,
+    )
+    if "kg_ids_groundtruth_canonical" in df.columns:
+        df["assigned_correct_per_groundtruth"] = df.apply(
+            lambda r: (
+                len(set(r.kg_ids_groundtruth_canonical) & set(_get_all_assigned_kg_ids(r))) > 0
+                if len(r.kg_ids_groundtruth_canonical) > 0 and len(_get_all_assigned_kg_ids(r)) > 0
+                else None
+            ),
+            axis=1,
+        )
+
     # Create reusable masks
     has_valid_ids_mask = df.curies.apply(len) > 0
     has_valid_ids_provided_mask = df.curies_provided.apply(len) > 0
@@ -224,6 +243,15 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
     # Record the many-to-one items, for easy reference
     many_to_one_items = df[many_to_one_mask]
     many_to_one_items.to_csv(f"{results_filepath_root}_g_many_to_one.tsv", sep="\t")
+
+    # Record incorrect assignments
+    if mapped_to_kg_provided > 0:
+        incorrect_per_provided = df[df.assigned_correct_per_provided.eq(False)]
+        incorrect_per_provided.to_csv(f"{results_filepath_root}_h_incorrect_per_provided.tsv", sep="\t")
+
+    if "assigned_correct_per_groundtruth" in df.columns:
+        incorrect_per_groundtruth = df[df.assigned_correct_per_provided.eq(False)]
+        incorrect_per_groundtruth.to_csv(f"{results_filepath_root}_i_incorrect_per_groundtruth.tsv", sep="\t")
 
     return stats
 
