@@ -8,6 +8,7 @@ import ast
 import json
 import logging
 from collections.abc import Callable
+from functools import partial
 from typing import Any
 
 import pandas as pd
@@ -54,20 +55,12 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
 
     # Add correctness columns (for later output)
     df["assigned_correct_per_provided"] = df.apply(
-        lambda r: (
-            len(set(r.kg_ids_provided.keys()) & set(_get_all_assigned_kg_ids(r))) > 0
-            if len(r.kg_ids_provided) > 0 and len(_get_all_assigned_kg_ids(r)) > 0
-            else None
-        ),
+        partial(_check_assigned_correct, get_reference_ids=lambda r: set(r.kg_ids_provided.keys())),  # type: ignore[arg-type]
         axis=1,
     )
     if "kg_ids_groundtruth_canonical" in df.columns:
         df["assigned_correct_per_groundtruth"] = df.apply(
-            lambda r: (
-                len(set(r.kg_ids_groundtruth_canonical) & set(_get_all_assigned_kg_ids(r))) > 0
-                if len(r.kg_ids_groundtruth_canonical) > 0 and len(_get_all_assigned_kg_ids(r)) > 0
-                else None
-            ),
+            partial(_check_assigned_correct, get_reference_ids=lambda r: set(r.kg_ids_groundtruth_canonical)),  # type: ignore[arg-type]
             axis=1,
         )
 
@@ -373,6 +366,14 @@ def _get_provided_kg_ids(r):
 def _get_groundtruth_kg_ids(r):
     """Get kg_ids from groundtruth for a row."""
     return r.kg_ids_groundtruth_canonical
+
+
+def _check_assigned_correct(r: pd.Series, get_reference_ids: Callable[[pd.Series], set]) -> bool | None:
+    reference_ids = get_reference_ids(r)
+    assigned_ids = _get_all_assigned_kg_ids(r)
+    if len(reference_ids) > 0 and len(assigned_ids) > 0:
+        return len(reference_ids & assigned_ids) > 0
+    return None
 
 
 def _calculate_precision(correct: int, total_predicted: int) -> float | None:
