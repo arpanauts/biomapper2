@@ -14,6 +14,7 @@ from ..utils import AssignedIDsDict, get_descendants, initialize_biolink_model_t
 from .annotators.base import BaseAnnotator
 from .annotators.kestrel_hybrid import KestrelHybridSearchAnnotator
 from .annotators.kestrel_text import KestrelTextSearchAnnotator
+from .annotators.kestrel_vector import KestrelVectorSearchAnnotator
 from .annotators.metabolomics_workbench import MetabolomicsWorkbenchAnnotator
 
 
@@ -22,9 +23,10 @@ class AnnotationEngine:
 
     def __init__(self, biolink_version: str | None = None):
         """Initialize the annotation engine and set up available annotators."""
-        self.kestrel_text_search_annotator = KestrelTextSearchAnnotator()
-        self.metabolomics_workbench_annotator = MetabolomicsWorkbenchAnnotator()
         self.kestrel_hybrid_search_annotator = KestrelHybridSearchAnnotator()
+        self.kestrel_text_search_annotator = KestrelTextSearchAnnotator()
+        self.kestrel_vector_search_annotator = KestrelVectorSearchAnnotator()
+        self.metabolomics_workbench_annotator = MetabolomicsWorkbenchAnnotator()
 
         self.bmt = initialize_biolink_model_toolkit(biolink_version)
 
