@@ -23,11 +23,15 @@ class AnnotationEngine:
 
     def __init__(self, biolink_version: str | None = None):
         """Initialize the annotation engine and set up available annotators."""
-        self.kestrel_hybrid_search_annotator = KestrelHybridSearchAnnotator()
-        self.kestrel_text_search_annotator = KestrelTextSearchAnnotator()
-        self.kestrel_vector_search_annotator = KestrelVectorSearchAnnotator()
-        self.metabolomics_workbench_annotator = MetabolomicsWorkbenchAnnotator()
-
+        self.annotator_registry: dict[str, BaseAnnotator] = {
+            annotator.slug: annotator
+            for annotator in [
+                KestrelHybridSearchAnnotator(),
+                KestrelTextSearchAnnotator(),
+                KestrelVectorSearchAnnotator(),
+                MetabolomicsWorkbenchAnnotator(),
+            ]
+        }
         self.bmt = initialize_biolink_model_toolkit(biolink_version)
 
     def annotate(
@@ -37,6 +41,7 @@ class AnnotationEngine:
         provided_id_fields: list[str],
         entity_type: str,
         mode: Literal["all", "missing", "none"] = "missing",
+        annotators: list[str] | None = None,
     ) -> pd.DataFrame | pd.Series:
         """
         Annotate entity with additional vocab IDs, obtained using various internal or external methods.
@@ -50,6 +55,7 @@ class AnnotationEngine:
                 - 'all': Annotate all entities
                 - 'missing': Only annotate entities without provided_ids (default)
                 - 'none': Skip annotation entirely (returns empty)
+            annotators: Optional list of annotators to use (by slug). If None, annotators are selected automatically.
 
         Returns:
             AssignedIDsDict (in a named Series) for single entity, and in a single-column
@@ -66,39 +72,46 @@ class AnnotationEngine:
 
         logging.debug("Beginning annotation step..")
 
-        biolink_category, annotators = self._select_annotators(entity_type)
+        # Validate the entity type and convert it into a standard biolink category
+        category = standardize_entity_type(entity_type, self.bmt)
+        logging.debug(f"Biolink category for entity type '{entity_type}' is: {category}")
+
+        annotator_slugs = annotators if annotators else self._select_annotators(category)
+        invalid_slugs = set(annotator_slugs).difference(set(self.annotator_registry.keys()))
+        if invalid_slugs:
+            raise ValueError(
+                f"Invalid annotator slug(s) provided: {invalid_slugs}. "
+                f"Valid options are: {list(self.annotator_registry.keys())}"
+            )
+        annotators_to_use = [self.annotator_registry[slug] for slug in annotator_slugs]
 
         if annotators:
-            logging.debug(f"Using annotators: {annotators}")
+            logging.debug(f"Using annotators: {annotator_slugs}")
         else:
             logging.warning("Did not identify any annotators to use for input item. Proceeding without assigned IDs.")
             return self._get_empty_assigned_ids(item)
 
         # Get annotations using selected annotators
         if isinstance(item, pd.DataFrame):
-            return self._annotate_dataframe(item, name_field, provided_id_fields, mode, biolink_category, annotators)
+            return self._annotate_dataframe(item, name_field, provided_id_fields, mode, category, annotators_to_use)
         else:
-            return self._annotate_single(item, name_field, provided_id_fields, mode, biolink_category, annotators)
+            return self._annotate_single(item, name_field, provided_id_fields, mode, category, annotators_to_use)
 
     # ------------------------------------- Helper methods --------------------------------------- #
 
-    def _select_annotators(self, entity_type: str) -> tuple[str, list[BaseAnnotator]]:
-        """Select appropriate annotators based on entity type."""
-
-        # Validate the entity type and convert it into a standard biolink category
-        category = standardize_entity_type(entity_type, self.bmt)
-        logging.debug(f"Biolink category for entity type '{entity_type}' is: {category}")
+    def _select_annotators(self, category: str) -> list[str]:
+        """Select appropriate annotators based on entity type (returns their slugs)."""
+        annotators: list[str] = []
 
         # Choose which annotators to use considering biolink category and its descendants
         category_with_descendants = get_descendants(category, self.bmt)
-        annotators: list[BaseAnnotator] = []
         if category_with_descendants.intersection({"biolink:SmallMolecule"}):
-            annotators.append(self.metabolomics_workbench_annotator)
+            annotators.append(MetabolomicsWorkbenchAnnotator.slug)
 
         # Always include fallback annotator (temp: orchestration will become more advanced later)
-        annotators.append(self.kestrel_hybrid_search_annotator)
+        annotators.append(KestrelHybridSearchAnnotator.slug)
 
-        return category, annotators
+        return annotators
 
     def _annotate_dataframe(
         self,

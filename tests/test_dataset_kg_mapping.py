@@ -90,3 +90,17 @@ def test_provide_pandas_df_to_mapper(shared_mapper: Mapper):
     result_df = pd.read_csv(results_tsv_path, sep="\t")
 
     assert result_df.shape[0] == df.shape[0]
+
+
+def test_user_provided_annotators(shared_mapper: Mapper):
+
+    results_tsv_path, stats = shared_mapper.map_dataset_to_kg(
+        dataset=str(PROJECT_ROOT / "data" / "examples" / "metabolites_synthetic.tsv"),
+        entity_type="metabolite",
+        name_column="name",
+        provided_id_columns=["INCHIKEY", "HMDB", "KEGG", "PUBCHEM", "CHEBI"],
+        array_delimiters=[",", ";"],
+        annotation_mode="all",
+        annotators=["kestrel-hybrid-search"],
+    )
+    assert "kestrel-hybrid-search" in stats["performance"]["per_annotator"]

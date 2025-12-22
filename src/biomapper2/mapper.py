@@ -49,6 +49,7 @@ class Mapper:
         array_delimiters: list[str] | None = None,
         stop_on_invalid_id: bool = False,
         annotation_mode: Literal["all", "missing", "none"] = "missing",
+        annotators: list[str] | None = None,
     ) -> pd.Series | dict[str, Any]:
         """
         Map a single entity to knowledge graph nodes.
@@ -64,6 +65,7 @@ class Mapper:
                 - 'all': Annotate all entities
                 - 'missing': Only annotate entities without provided_ids (default)
                 - 'none': Skip annotation entirely (returns empty)
+            annotators: Optional list of annotators to use (by slug). If None, annotators are selected automatically.
 
         Returns:
             Mapped entity with added fields: curies, kg_ids, chosen_kg_id, etc.
@@ -79,6 +81,7 @@ class Mapper:
             provided_id_fields=provided_id_fields,
             entity_type=entity_type,
             mode=annotation_mode,
+            annotators=annotators,
         )
         assert isinstance(annotation_result, pd.Series)
         mapped_item = merge_into_entity(mapped_item, annotation_result)
@@ -112,8 +115,9 @@ class Mapper:
         name_column: str,
         provided_id_columns: list[str],
         array_delimiters: list[str] | None = None,
-        annotation_mode: Literal["all", "missing", "none"] = "missing",
         output_prefix: str | None = None,
+        annotation_mode: Literal["all", "missing", "none"] = "missing",
+        annotators: list[str] | None = None,
     ) -> tuple[str, dict[str, Any]]:
         """
         Map all entities in a dataset to knowledge graph nodes.
@@ -129,6 +133,7 @@ class Mapper:
                 - 'missing': Only annotate entities without provided_ids (default)
                 - 'none': Skip annotation entirely (returns empty)
             output_prefix: Optional path to save the output TSV file
+            annotators: Optional list of annotators to use (by slug). If None, annotators are selected automatically.
 
         Returns:
             Tuple of (output_tsv_path, stats_summary)
@@ -170,6 +175,7 @@ class Mapper:
             provided_id_fields=provided_id_columns,
             entity_type=entity_type,
             mode=annotation_mode,
+            annotators=annotators,
         )
         df = df.join(annotation_df)
         logging.info(f"After step 1 (annotation), df is: \n{df}")
