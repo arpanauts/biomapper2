@@ -44,7 +44,8 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
     ) -> pd.Series:  # Series of AssignedIDsDicts
         """Implements BaseAnnotator.get_annotations_bulk"""
 
-        search_terms = entities[name_field].tolist()
+        # Filter out any empty/NaN entity names
+        search_terms = [t for t in entities[name_field].tolist() if text_is_not_empty(t)]
 
         logging.info(f"Getting hybrid search results from Kestrel API for {len(entities)} entities")
         results = self._kestrel_hybrid_search(search_terms, category, limit=1)
