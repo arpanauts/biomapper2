@@ -184,16 +184,13 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
         "overall": {
             "coverage": _calculate_coverage(mapped_to_kg, total_items),
             "coverage_explanation": f"{mapped_to_kg} / {total_items}",
+            "per_groundtruth": _calculate_groundtruth_performance(
+                df, predicted_mask=mapped_to_kg_mask, get_predicted_kg_ids=lambda r: r.kg_ids.keys()
+            ),
         },
         "assigned_ids": assigned_performance,
         "per_annotator": per_annotator_stats,
     }
-
-    # Add OVERALL groundtruth comparison if available
-    if "kg_ids_groundtruth_canonical" in df.columns:
-        performance["overall"]["per_groundtruth"] = _calculate_groundtruth_performance(
-            df, predicted_mask=mapped_to_kg_mask, get_predicted_kg_ids=lambda r: r.kg_ids.keys()
-        )
 
     # Tack the performance metrics onto our other stats
     stats["performance"] = performance
@@ -247,23 +244,26 @@ def _calculate_assigned_performance(
     mapped_to_kg_assigned = assigned_kg_ids_mask.sum()
     mapped_to_kg_both = (assigned_kg_ids_mask & mapped_to_kg_provided_mask).sum()
 
-    correct_per_provided = df.apply(
-        lambda r: len(set(_get_provided_kg_ids(r)) & set(get_kg_ids_assigned(r))) > 0,
-        axis=1,
-    ).sum()
+    if mapped_to_kg_provided:
+        correct_per_provided = df.apply(
+            lambda r: len(set(_get_provided_kg_ids(r)) & set(get_kg_ids_assigned(r))) > 0,
+            axis=1,
+        ).sum()
 
-    precision = _calculate_precision(correct_per_provided, mapped_to_kg_both)
-    recall = _calculate_recall(correct_per_provided, mapped_to_kg_provided)
+        precision = _calculate_precision(correct_per_provided, mapped_to_kg_both)
+        recall = _calculate_recall(correct_per_provided, mapped_to_kg_provided)
 
-    per_provided = {
-        "mapped_to_kg_provided_and_assigned": int(mapped_to_kg_both),
-        "correct": int(correct_per_provided),
-        "precision": precision,
-        "precision_explanation": f"{correct_per_provided} / {mapped_to_kg_both}",
-        "recall": recall,
-        "recall_explanation": f"{correct_per_provided} / {mapped_to_kg_provided}",
-        "f1_score": _calculate_f1_score(precision, recall),
-    }
+        per_provided = {
+            "mapped_to_kg_provided_and_assigned": int(mapped_to_kg_both),
+            "correct": int(correct_per_provided),
+            "precision": precision,
+            "precision_explanation": f"{correct_per_provided} / {mapped_to_kg_both}",
+            "recall": recall,
+            "recall_explanation": f"{correct_per_provided} / {mapped_to_kg_provided}",
+            "f1_score": _calculate_f1_score(precision, recall),
+        }
+    else:
+        per_provided = None
 
     if include_chosen:
         correct_per_provided_chosen = (
@@ -275,29 +275,27 @@ def _calculate_assigned_performance(
         precision_chosen = _calculate_precision(correct_per_provided_chosen, mapped_to_kg_both)
         recall_chosen = _calculate_recall(correct_per_provided_chosen, mapped_to_kg_provided)
 
-        per_provided["after_resolving_one_to_manys"] = {
-            "correct": int(correct_per_provided_chosen),
-            "precision": precision_chosen,
-            "precision_explanation": f"{correct_per_provided_chosen} / {mapped_to_kg_both}",
-            "recall": recall_chosen,
-            "recall_explanation": f"{correct_per_provided_chosen} / {mapped_to_kg_provided}",
-            "f1_score": _calculate_f1_score(precision_chosen, recall_chosen),
-        }
+        if per_provided:
+            per_provided["after_resolving_one_to_manys"] = {
+                "correct": int(correct_per_provided_chosen),
+                "precision": precision_chosen,
+                "precision_explanation": f"{correct_per_provided_chosen} / {mapped_to_kg_both}",
+                "recall": recall_chosen,
+                "recall_explanation": f"{correct_per_provided_chosen} / {mapped_to_kg_provided}",
+                "f1_score": _calculate_f1_score(precision_chosen, recall_chosen),
+            }
 
     result = {
         "mapped_to_kg": int(mapped_to_kg_assigned),
         "coverage": _calculate_coverage(mapped_to_kg_assigned, total_items),
         "coverage_explanation": f"{mapped_to_kg_assigned} / {total_items}",
-        "per_provided_ids": per_provided,
-    }
-
-    # Add groundtruth comparison if available
-    if "kg_ids_groundtruth_canonical" in df.columns:
-        result["per_groundtruth"] = _calculate_groundtruth_performance(
+        "per_groundtruth": _calculate_groundtruth_performance(
             df,
             predicted_mask=assigned_kg_ids_mask,
             get_predicted_kg_ids=get_kg_ids_assigned,
-        )
+        ),
+        "per_provided_ids": per_provided,
+    }
 
     return result
 
@@ -306,29 +304,32 @@ def _calculate_groundtruth_performance(
     df: pd.DataFrame,
     predicted_mask: pd.Series,
     get_predicted_kg_ids: Callable,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
     """Calculate precision/recall/F1 against canonical groundtruth IDs."""
-    has_groundtruth_mask = df.kg_ids_groundtruth_canonical.apply(len) > 0
-    groundtruth_count = has_groundtruth_mask.sum()
-    mapped_both = (predicted_mask & has_groundtruth_mask).sum()
+    if "kg_ids_groundtruth_canonical" in df.columns:
+        has_groundtruth_mask = df.kg_ids_groundtruth_canonical.apply(len) > 0
+        groundtruth_count = has_groundtruth_mask.sum()
+        mapped_both = (predicted_mask & has_groundtruth_mask).sum()
 
-    correct = df.apply(
-        lambda r: len(set(r.kg_ids_groundtruth_canonical) & set(get_predicted_kg_ids(r))) > 0,
-        axis=1,
-    ).sum()
+        correct = df.apply(
+            lambda r: len(set(r.kg_ids_groundtruth_canonical) & set(get_predicted_kg_ids(r))) > 0,
+            axis=1,
+        ).sum()
 
-    precision = _calculate_precision(correct, mapped_both)
-    recall = _calculate_recall(correct, groundtruth_count)
+        precision = _calculate_precision(correct, mapped_both)
+        recall = _calculate_recall(correct, groundtruth_count)
 
-    return {
-        "mapped_to_kg_and_groundtruth": int(mapped_both),
-        "correct": int(correct),
-        "precision": precision,
-        "precision_explanation": f"{correct} / {mapped_both}",
-        "recall": recall,
-        "recall_explanation": f"{correct} / {groundtruth_count}",
-        "f1_score": _calculate_f1_score(precision, recall),
-    }
+        return {
+            "mapped_to_kg_and_groundtruth": int(mapped_both),
+            "correct": int(correct),
+            "precision": precision,
+            "precision_explanation": f"{correct} / {mapped_both}",
+            "recall": recall,
+            "recall_explanation": f"{correct} / {groundtruth_count}",
+            "f1_score": _calculate_f1_score(precision, recall),
+        }
+    else:
+        return None
 
 
 def _get_all_assigned_kg_ids(r) -> set:
