@@ -85,6 +85,7 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any, annotation_mode:
     has_unrecognized_vocabs_assigned_mask = df.unrecognized_vocabs_assigned.apply(lambda x: len(x) > 0)
     has_unrecognized_vocabs_mask = has_unrecognized_vocabs_provided_mask | has_unrecognized_vocabs_assigned_mask
     has_no_ids_mask = ~has_valid_ids_mask & ~has_invalid_ids_mask
+    has_provided_ids_mask = has_valid_ids_provided_mask | has_invalid_ids_provided_mask
     assigned_correct_per_provided_mask = df.apply(
         lambda r: len(
             set(r.kg_ids_provided.keys())
@@ -125,9 +126,10 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any, annotation_mode:
     many_to_one_mappings = many_to_one_mask.sum()
     multi_mappings = (one_to_many_mask | many_to_one_mask).sum()
     one_to_one_mappings = mapped_to_kg - multi_mappings
+    has_provided_ids = has_provided_ids_mask.sum()
 
     if annotation_mode == "missing":
-        eligible_for_assignment = total_items - has_valid_ids_provided
+        eligible_for_assignment = total_items - has_provided_ids
     elif annotation_mode == "all":
         eligible_for_assignment = total_items
     else:  # "none"
