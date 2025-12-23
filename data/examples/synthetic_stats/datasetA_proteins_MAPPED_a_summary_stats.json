@@ -1,0 +1,41 @@
+{
+  "total_items": 2923,
+  "mapped_to_kg": 2776,
+  "mapped_to_kg_provided": 2637,
+  "mapped_to_kg_assigned": 98,
+  "mapped_to_kg_provided_and_assigned": 41,
+  "one_to_one_mappings": 2591,
+  "multi_mappings": 185,
+  "one_to_many_mappings": 185,
+  "many_to_one_mappings": 0,
+  "has_valid_ids": 2779,
+  "has_valid_ids_provided": 2640,
+  "has_valid_ids_assigned": 98,
+  "has_only_provided_ids": 2640,
+  "has_only_assigned_ids": 98,
+  "has_both_provided_and_assigned_ids": 41,
+  "assigned_mappings_correct_per_provided": 0,
+  "assigned_mappings_correct_per_provided_chosen": 0,
+  "has_invalid_ids": 144,
+  "has_invalid_ids_provided": 144,
+  "has_invalid_ids_assigned": 0,
+  "has_no_ids": 0,
+  "has_invalid_ids_and_not_mapped_to_kg": 147,
+  "performance": {
+    "overall": {
+      "coverage": 0.9497092028737598,
+      "coverage_explanation": "2776 / 2923"
+    },
+    "assigned_ids": {
+      "coverage": 0.0,
+      "coverage_explanation": "0 / 2923",
+      "per_provided_ids": {
+        "precision": null,
+        "precision_explanation": "0 / 0",
+        "recall": 0.0,
+        "recall_explanation": "0 / 2640",
+        "f1_score": null
+      }
+    }
+  }
+}
