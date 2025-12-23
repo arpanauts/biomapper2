@@ -85,10 +85,12 @@ stats_df = viz.aggregate_stats(
 
 viz.render_heatmap(
     df=stats_df,
-    output_path='docs/assets/comparison_viz.png'
+    output_path='docs/assets/comparison_viz' # defaults to producing pdf and png, configurable via Visualizer()
 )
 ```
-<img src='docs/assets/comparison_viz.png' width="500">
+<p align="center">
+    <img src='docs/assets/comparison_viz.png' width="500">
+</p>
 
 ## Run examples
 ```bash
