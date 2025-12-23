@@ -1,0 +1,41 @@
+{
+  "total_items": 1500,
+  "mapped_to_kg": 1170,
+  "mapped_to_kg_provided": 936,
+  "mapped_to_kg_assigned": 164,
+  "mapped_to_kg_provided_and_assigned": 70,
+  "one_to_one_mappings": 1157,
+  "multi_mappings": 13,
+  "one_to_many_mappings": 13,
+  "many_to_one_mappings": 0,
+  "has_valid_ids": 1170,
+  "has_valid_ids_provided": 936,
+  "has_valid_ids_assigned": 164,
+  "has_only_provided_ids": 936,
+  "has_only_assigned_ids": 164,
+  "has_both_provided_and_assigned_ids": 70,
+  "assigned_mappings_correct_per_provided": 0,
+  "assigned_mappings_correct_per_provided_chosen": 0,
+  "has_invalid_ids": 330,
+  "has_invalid_ids_provided": 330,
+  "has_invalid_ids_assigned": 0,
+  "has_no_ids": 0,
+  "has_invalid_ids_and_not_mapped_to_kg": 330,
+  "performance": {
+    "overall": {
+      "coverage": 0.78,
+      "coverage_explanation": "1170 / 1500"
+    },
+    "assigned_ids": {
+      "coverage": 0.0,
+      "coverage_explanation": "0 / 1500",
+      "per_provided_ids": {
+        "precision": null,
+        "precision_explanation": "0 / 0",
+        "recall": 0.0,
+        "recall_explanation": "0 / 936",
+        "f1_score": null
+      }
+    }
+  }
+}
