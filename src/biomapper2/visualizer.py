@@ -12,7 +12,7 @@ import seaborn as sns
 from matplotlib.figure import Figure
 
 
-class HarmonizationVisualizer:
+class Visualizer:
     """Aggregates mapping stats and renders visualizations."""
 
     DEFAULT_CONFIG = {

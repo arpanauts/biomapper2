@@ -69,8 +69,26 @@ mapper.map_dataset_to_kg(
     array_delimiters=['_']
 )
 ```
-
 See `examples/` for complete working examples.
+
+### Generate KG-performance across datasets
+```python
+
+from biomapper.visualizer import Visualizer
+
+viz = Visualizer()
+
+# collect metrics from jsons named {dataset}_{entity}_MAPPED_a_summary_stats.json
+stats_df = viz.aggregate_stats(
+    stats_dir='data/examples/synthetic_stats/'
+)
+
+viz.render_heatmap(
+    df=stats_df,
+    output_path='docs/assets/comparison_viz.png'
+)
+```
+<img src='docs/assets/comparison_viz.png' width="500">
 
 ## Run examples
 ```bash
@@ -117,6 +135,7 @@ src/biomapper2/
 │   ├── linker.py               # Links curies to knowledge graph nodes
 │   └── resolver.py             # Resolves one-to-many entity→KG matches
 └── utils.py                    # Utility functions
+└── visualizer.py               # Visualize KG performance across datasets
 
 examples/                       # Working code examples
 tests/                          # Pytest test suite
