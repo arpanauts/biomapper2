@@ -6,7 +6,7 @@ Provides logging setup and mathematical helpers for metric calculations.
 
 import logging
 from collections.abc import Iterable
-from typing import Any, TypeGuard, cast, Literal
+from typing import Any, Literal, TypeGuard, cast
 
 import pandas as pd
 import requests

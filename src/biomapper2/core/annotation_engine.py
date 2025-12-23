@@ -11,11 +11,11 @@ from typing import Any
 import pandas as pd
 
 from ..utils import (
+    AnnotationMode,
     AssignedIDsDict,
     get_descendants,
     initialize_biolink_model_toolkit,
     standardize_entity_type,
-    AnnotationMode,
 )
 from .annotators.base import BaseAnnotator
 from .annotators.kestrel_hybrid import KestrelHybridSearchAnnotator

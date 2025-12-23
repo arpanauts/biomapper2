@@ -13,7 +13,7 @@ from typing import Any
 
 import pandas as pd
 
-from ..utils import safe_divide, AnnotationMode
+from ..utils import AnnotationMode, safe_divide
 
 
 def analyze_dataset_mapping(results_tsv_path: str, linker: Any, annotation_mode: AnnotationMode) -> dict[str, Any]:

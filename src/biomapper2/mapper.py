@@ -17,7 +17,7 @@ from .core.annotation_engine import AnnotationEngine
 from .core.linker import Linker
 from .core.normalizer import Normalizer
 from .core.resolver import Resolver
-from .utils import merge_into_entity, setup_logging, AnnotationMode
+from .utils import AnnotationMode, merge_into_entity, setup_logging
 
 setup_logging()
 
