@@ -210,6 +210,6 @@ class Mapper:
         logging.info(f"Dumping output TSV to {output_tsv_path}")
         df.to_csv(output_tsv_path, sep="\t", index=False)
 
-        stats_summary = analyze_dataset_mapping(output_tsv_path, self.linker)
+        stats_summary = analyze_dataset_mapping(output_tsv_path, self.linker, annotation_mode)
 
         return output_tsv_path, stats_summary

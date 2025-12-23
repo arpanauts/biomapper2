@@ -13,10 +13,10 @@ from typing import Any
 
 import pandas as pd
 
-from ..utils import safe_divide
+from ..utils import safe_divide, AnnotationMode
 
 
-def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any]:
+def analyze_dataset_mapping(results_tsv_path: str, linker: Any, annotation_mode: AnnotationMode) -> dict[str, Any]:
     """
     Analyze dataset mapping results and generate summary statistics.
 
@@ -122,6 +122,13 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
     multi_mappings = (one_to_many_mask | many_to_one_mask).sum()
     one_to_one_mappings = mapped_to_kg - multi_mappings
 
+    if annotation_mode == "missing":
+        eligible_for_assignment = total_items - has_valid_ids_provided
+    elif annotation_mode == "all":
+        eligible_for_assignment = total_items
+    else:  # "none"
+        eligible_for_assignment = 0
+
     # Do some sanity checks
     assert multi_mappings <= mapped_to_kg
     assert one_to_many_mappings <= multi_mappings
@@ -129,11 +136,13 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
     assert multi_mappings + one_to_one_mappings == mapped_to_kg
     assert has_only_provided_ids + has_only_assigned_ids + has_both_provided_and_assigned_ids == has_valid_ids
     assert assigned_correct_per_provided <= mapped_to_kg_provided
+    assert eligible_for_assignment <= total_items
 
     # Compile final stats summary
     stats = {
         "mapped_dataset": results_tsv_path,
         "total_items": total_items,
+        "annotation_mode": annotation_mode,
         "mapped_to_kg": int(mapped_to_kg),
         "mapped_to_kg_provided": int(mapped_to_kg_provided),
         "mapped_to_kg_assigned": int(mapped_to_kg_assigned),
@@ -167,7 +176,8 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
         mapped_to_kg_provided_mask=mapped_to_kg_provided_mask,
         mapped_to_kg_provided=mapped_to_kg_provided,
         get_kg_ids_assigned=_get_all_assigned_kg_ids,
-        total_items=total_items,
+        eligible_entities=eligible_for_assignment,
+        annotation_mode=annotation_mode,
         include_chosen=True,
         chosen_assigned_col="chosen_kg_id_assigned",
     )
@@ -188,7 +198,8 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any) -> dict[str, Any
             mapped_to_kg_provided_mask=mapped_to_kg_provided_mask,
             mapped_to_kg_provided=mapped_to_kg_provided,
             get_kg_ids_assigned=lambda r, a=annotator: r.kg_ids_assigned.get(a, {}).keys(),
-            total_items=total_items,
+            eligible_entities=eligible_for_assignment,
+            annotation_mode=annotation_mode,
         )
 
     # Compile performance stats
@@ -255,7 +266,8 @@ def _calculate_assigned_performance(
     mapped_to_kg_provided_mask: pd.Series,
     mapped_to_kg_provided: int,
     get_kg_ids_assigned: Callable,
-    total_items: int,
+    eligible_entities: int,
+    annotation_mode: AnnotationMode,
     include_chosen: bool = False,
     chosen_assigned_col: str | None = None,
 ) -> dict[str, Any]:
@@ -265,7 +277,7 @@ def _calculate_assigned_performance(
     mapped_to_kg_assigned = assigned_kg_ids_mask.sum()
     mapped_to_kg_both = (assigned_kg_ids_mask & mapped_to_kg_provided_mask).sum()
 
-    if mapped_to_kg_provided:
+    if annotation_mode == "all" and mapped_to_kg_provided:
         correct_per_provided = df.apply(
             lambda r: len(set(_get_provided_kg_ids(r)) & set(get_kg_ids_assigned(r))) > 0,
             axis=1,
@@ -283,20 +295,17 @@ def _calculate_assigned_performance(
             "recall_explanation": f"{correct_per_provided} / {mapped_to_kg_provided}",
             "f1_score": _calculate_f1_score(precision, recall),
         }
-    else:
-        per_provided = None
 
-    if include_chosen:
-        correct_per_provided_chosen = (
-            (df["chosen_kg_id_provided"] == df[chosen_assigned_col])
-            & df["chosen_kg_id_provided"].notna()
-            & df[chosen_assigned_col].notna()
-        ).sum()
+        if include_chosen:
+            correct_per_provided_chosen = (
+                (df["chosen_kg_id_provided"] == df[chosen_assigned_col])
+                & df["chosen_kg_id_provided"].notna()
+                & df[chosen_assigned_col].notna()
+            ).sum()
 
-        precision_chosen = _calculate_precision(correct_per_provided_chosen, mapped_to_kg_both)
-        recall_chosen = _calculate_recall(correct_per_provided_chosen, mapped_to_kg_provided)
+            precision_chosen = _calculate_precision(correct_per_provided_chosen, mapped_to_kg_both)
+            recall_chosen = _calculate_recall(correct_per_provided_chosen, mapped_to_kg_provided)
 
-        if per_provided:
             per_provided["after_resolving_one_to_manys"] = {
                 "correct": int(correct_per_provided_chosen),
                 "precision": precision_chosen,
@@ -305,11 +314,14 @@ def _calculate_assigned_performance(
                 "recall_explanation": f"{correct_per_provided_chosen} / {mapped_to_kg_provided}",
                 "f1_score": _calculate_f1_score(precision_chosen, recall_chosen),
             }
+    else:
+        per_provided = None
 
     result = {
+        "eligible_entities": int(eligible_entities),
         "mapped_to_kg": int(mapped_to_kg_assigned),
-        "coverage": _calculate_coverage(mapped_to_kg_assigned, total_items),
-        "coverage_explanation": f"{mapped_to_kg_assigned} / {total_items}",
+        "coverage": _calculate_coverage(mapped_to_kg_assigned, eligible_entities),
+        "coverage_explanation": f"{mapped_to_kg_assigned} / {eligible_entities}",
         "per_groundtruth": _calculate_groundtruth_performance(
             df,
             predicted_mask=assigned_kg_ids_mask,
