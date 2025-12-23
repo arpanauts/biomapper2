@@ -157,6 +157,7 @@ def analyze_dataset_mapping(results_tsv_path: str, linker: Any, annotation_mode:
         "multi_mappings": int(multi_mappings),
         "one_to_many_mappings": int(one_to_many_mappings),
         "many_to_one_mappings": int(many_to_one_mappings),
+        "has_provided_ids": int(has_provided_ids),
         "has_valid_ids": int(has_valid_ids),
         "has_valid_ids_provided": int(has_valid_ids_provided),
         "has_valid_ids_assigned": int(has_valid_ids_assigned),
