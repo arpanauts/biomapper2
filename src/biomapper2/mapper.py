@@ -7,6 +7,7 @@ through annotation, normalization, linking, and resolution steps.
 
 import copy
 import logging
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -110,7 +111,7 @@ class Mapper:
 
     def map_dataset_to_kg(
         self,
-        dataset: str | pd.DataFrame,  # changed from dataset_tsv_path
+        dataset: str | Path | pd.DataFrame,
         entity_type: str,
         name_column: str,
         provided_id_columns: list[str],
@@ -153,7 +154,8 @@ class Mapper:
         if isinstance(dataset, pd.DataFrame):
             df = dataset
             output_tsv_path = "input_df_MAPPED.tsv" if output_prefix is None else f"{output_prefix}_MAPPED.tsv"
-        elif isinstance(dataset, str):
+        elif isinstance(dataset, (str, Path)):
+            dataset = str(dataset)
             # Load tsv into pandas
             output_tsv_path = dataset.replace(".tsv", "_MAPPED.tsv").replace(".csv", "_MAPPED.tsv")
             if dataset.endswith(".tsv"):
@@ -162,6 +164,11 @@ class Mapper:
                 df = pd.read_csv(dataset, dtype={id_col: str for id_col in provided_id_columns})
             else:
                 raise ValueError(f"Unsupported file extension for dataset: {dataset}")
+        else:
+            raise ValueError(
+                f"Unsupported type of '{type(dataset)}' for 'dataset' parameter; "
+                f"only str, Path, or pd.DataFrame are supported"
+            )
 
         # Do some basic cleanup to try to ensure empty cells are represented consistently
         df[provided_id_columns] = df[provided_id_columns].replace("-", np.nan)
