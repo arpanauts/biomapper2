@@ -8,6 +8,7 @@ import logging
 from collections.abc import Iterable
 from typing import Any, Literal, TypeGuard, cast
 
+import inflect
 import pandas as pd
 import requests
 from bmt import Toolkit
@@ -52,9 +53,10 @@ def initialize_biolink_model_toolkit(biolink_version: str | None = None) -> Tool
 
 def standardize_entity_type(entity_type: str, bmt: Toolkit) -> str:
     # Map any aliases to their corresponding biolink category
-    entity_type_cleaned = "".join(c for c in entity_type.removeprefix("biolink:").lower() if c.isalpha())
+    entity_type_cleaned = entity_type.removeprefix("biolink:").lower()
+    entity_type_singular = singularize(entity_type_cleaned)
     aliases = {"metabolite": "SmallMolecule", "lipid": "SmallMolecule"}
-    category_raw = aliases.get(entity_type_cleaned, entity_type)
+    category_raw = aliases.get(entity_type_singular, entity_type_singular)
 
     if bmt.is_category(category_raw):
         category_element = bmt.get_element(category_raw)
@@ -80,6 +82,30 @@ def get_descendants(biolink_category: str, bmt: Toolkit) -> set[str]:
         )
         logging.error(message)
         raise ValueError(message)
+
+
+def singularize(phrase: str) -> str:
+    """Singularize the last word of a phrase.
+
+    Examples:
+        "metabolites" -> "metabolite"
+        "amino acids" -> "amino acid"
+        "classes" -> "class"
+    """
+    _inflect_engine = inflect.engine()
+
+    words = phrase.split()
+    if not words:
+        return phrase
+
+    last_word = words[-1]
+    singular = _inflect_engine.singular_noun(last_word)
+
+    # singular_noun returns False if the word is already singular
+    if singular:
+        words[-1] = singular
+
+    return " ".join(words)
 
 
 def to_list(
