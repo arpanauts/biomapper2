@@ -58,4 +58,5 @@ known-first-party = ["biomapper2"]
 [tool.pytest.ini_options]
 markers = [
     "integration: marks tests as integration tests (deselect with '-m \"not integration\"')",
+    "external: tests that depend on third-party APIs we don't control",
 ]
