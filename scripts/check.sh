@@ -14,6 +14,6 @@ echo "Running pyright..."
 uv run pyright
 
 echo "Running tests..."
-uv run pytest -v
+uv run pytest -v -m "not external"
 
 echo "✅ All checks passed!"
