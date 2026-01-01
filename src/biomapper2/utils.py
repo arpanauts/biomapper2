@@ -59,10 +59,15 @@ def initialize_biolink_model_toolkit(biolink_version: str | None = None) -> Tool
 
 def standardize_entity_type(entity_type: str, bmt: Toolkit) -> str:
     # Map any aliases to their corresponding biolink category
-    entity_type_cleaned = entity_type.removeprefix("biolink:").lower()
-    entity_type_singular = singularize(entity_type_cleaned)
-    aliases = {"metabolite": "SmallMolecule", "lipid": "SmallMolecule"}
-    category_raw = aliases.get(entity_type_singular, entity_type_singular)
+    entity_type_singular = singularize(entity_type.removeprefix("biolink:"))
+    entity_type_cleaned = "".join(entity_type_singular.lower().split())
+    aliases = {
+        "metabolite": "SmallMolecule",
+        "lipid": "SmallMolecule",
+        "clinicallab": "ClinicalFinding",
+        "lab": "ClinicalFinding",
+    }
+    category_raw = aliases.get(entity_type_cleaned, entity_type_cleaned)
 
     if bmt.is_category(category_raw):
         category_element = bmt.get_element(category_raw)
@@ -71,22 +76,22 @@ def standardize_entity_type(entity_type: str, bmt: Toolkit) -> str:
 
     message = (
         f"Could not find valid Biolink category for entity type '{entity_type}'. "
-        f"Valid entity types are: {bmt.get_descendants('NamedThing')}. Or accepted aliases are: {aliases}."
+        f"Valid entity types are: {bmt.get_descendants('NamedThing')}. Or accepted aliases are: {aliases}. "
+        f"Will proceed with top-level Biolink category of NamedThing (Annotators may be overselected/not used ideally)."
     )
-    logging.error(message)
-    raise ValueError(message)
+    logging.warning(message)
+    return "NamedThing"
 
 
-def get_descendants(biolink_category: str, bmt: Toolkit) -> set[str]:
-    # Get descendants of the given category (includes self)
-    if bmt.is_category(biolink_category):
-        return set(bmt.get_descendants(biolink_category, formatted=True, mixin=True, reflexive=True))
+def get_descendants(category: str, bmt: Toolkit) -> set[str]:
+    # Get Biolink descendants of the given category (includes self)
+    if bmt.is_category(category):
+        return set(bmt.get_descendants(category, formatted=True, mixin=True, reflexive=True))
     else:
         message = (
-            f"Category '{biolink_category}' is not a valid biolink category. Valid categories are: "
+            f"Category '{category}' is not a valid biolink category. Valid categories are: "
             f"{bmt.get_descendants('NamedThing')}."
         )
-        logging.error(message)
         raise ValueError(message)
 
 
