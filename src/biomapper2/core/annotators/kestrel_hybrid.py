@@ -49,7 +49,6 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
 
         logging.info(f"Getting hybrid search results from Kestrel API for {len(entities)} entities")
         results = self._kestrel_hybrid_search(search_terms, category, limit=1)
-        logging.debug(f"Kestrel results: {results}")
 
         # Annotate each entity using the results from the bulk request
         assigned_ids_col = entities.apply(
@@ -64,4 +63,6 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
     def _kestrel_hybrid_search(search_text: str | list[str], category: str, limit: int = 10) -> dict[str, list[dict]]:
         """Call Kestrel hybrid search endpoint."""
         payload = {"search_text": search_text, "limit": limit, "category_filter": category}
-        return kestrel_request("POST", "hybrid-search", json=payload)
+        results = kestrel_request("POST", "hybrid-search", json=payload)
+        # Filter out very low-scoring results (hybrid search scores range from 0-5)
+        return {s: [match for match in matches if match["score"] >= 0.5] for s, matches in results.items()}
