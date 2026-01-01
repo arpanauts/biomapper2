@@ -15,7 +15,7 @@ import requests
 import requests_cache
 from bmt import Toolkit
 
-from .config import BIOLINK_VERSION_DEFAULT, KESTREL_API_KEY, KESTREL_API_URL, LOG_LEVEL, CACHE_DIR
+from .config import BIOLINK_VERSION_DEFAULT, CACHE_DIR, KESTREL_API_KEY, KESTREL_API_URL, LOG_LEVEL
 
 # Type alias for annotation results structure
 # Structure: {annotator: {vocabulary: {local_id: result_metadata_dict}}}
