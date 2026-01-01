@@ -2,6 +2,7 @@ import logging
 
 from biomapper2.config import PROJECT_ROOT
 from biomapper2.mapper import Mapper
+from biomapper2.visualizer import Visualizer
 
 name = "name_col"
 ids = "id_cols"
@@ -10,6 +11,8 @@ delimiters = "delimiters"
 datasets = {
     "arivale_metabolites": {name: "CHEMICAL_NAME", ids: ["CAS", "KEGG", "HMDB", "PUBCHEM", "INCHIKEY", "SMILES"]},
     "arivale_proteins": {name: "gene_name", ids: ["uniprot", "gene_id"]},
+    "arivale_labs": {name: "Display Name", ids: ["Labcorp LOINC ID", "Quest LOINC ID"]},
+    "arivale_lipids": {name: "CHEMICAL_NAME", ids: ["HMDB", "KEGG"]},
     "ukbb_proteins": {name: "Assay", ids: ["UniProt"], delimiters: ["_"]},
 }
 
@@ -32,3 +35,12 @@ for dataset_shortname, params in datasets.items():
         array_delimiters=params.get(delimiters),
         annotation_mode="all",
     )
+
+
+viz = Visualizer()
+
+stats_df = viz.aggregate_stats(stats_dir=datasets_dir)
+
+viz.render_heatmap(df=stats_df, output_path=datasets_dir / "heatmap", title="Mapping Summary - KRAKEN")
+
+viz.render_breakdown(df=stats_df, output_path=datasets_dir / "breakdown", title="Mapping Results Breakdown - KRAKEN")
