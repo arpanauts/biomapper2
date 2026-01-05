@@ -6,7 +6,6 @@ datasets_dir = PROJECT_ROOT / "data" / "milestone"
 
 
 # Prep UKBB clinical labs (using Trent's result file from original biomapper)
-
 print("Prepping UKBB clinical labs tsv..")
 biomapper_results_path = datasets_dir / "ukbb_chemistry_COMPLETE.tsv"
 
@@ -25,13 +24,9 @@ df.to_csv(datasets_dir / "ukbb_labs.tsv", sep="\t")
 print("Done prepping UKBB clinical labs tsv.")
 
 
-# Prep UKBB metabolites (using Trent's result file from original biomapper)
-
+# Prep UKBB metabolites (remove Trent's result cols)
 print("Prepping UKBB metabolites tsv..")
-df = pd.read_table(datasets_dir / "ukbb_metabolites_COMPLETE.tsv")
-# Remove duplicate metabolites
-df = df.drop_duplicates(subset="nightingale_biomarker_id", keep="first")
-# Remove Trent's mapping result columns
+df = pd.read_table(datasets_dir / "ukbb_metabolites_COMPLETE_manuallyedited.tsv")
 df = df.drop(
     columns=[
         "kraken_node_id",
@@ -49,7 +44,6 @@ df = df.drop(
         "integration_timestamp",
     ]
 )
-
 df.to_csv(datasets_dir / "ukbb_metabolites.tsv", sep="\t")
 print("Done prepping UKBB metabolites tsv.")
 
@@ -60,3 +54,17 @@ df = pd.read_table(datasets_dir / "israeli10k_nightingale_proteins_mapped.tsv")
 df = df[["nightingale_biomarker_id", "nightingale_name", "biomarker_description", "units"]]
 df.to_csv(datasets_dir / "hpp_proteins.tsv", sep="\t")
 print("Done prepping HPP proteins tsv.")
+
+# Prep HPP metabolites (remove Trent's result cols)
+print("Prepping HPP metabolites tsv..")
+df = pd.read_table(datasets_dir / "israeli10k_metabolites_COMPLETE.tsv")
+df = df[["nightingale_biomarker_id", "nightingale_name", "nightingale_description", "unit", "nightingale_category"]]
+df.to_csv(datasets_dir / "hpp_metabolites.tsv", sep="\t")
+print("Done prepping HPP metabolites tsv.")
+
+# Prep HPP lipids (remove refmet annotation cols)
+print("Prepping HPP lipids tsv..")
+df = pd.read_table(datasets_dir / "Israeli10K_website_lipidomics_metadata_REFMETANNOT.tsv")
+df = df[["Input.name"]]
+df.to_csv(datasets_dir / "hpp_lipids.tsv", sep="\t")
+print("Done prepping HPP lipids tsv.")

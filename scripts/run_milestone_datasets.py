@@ -11,22 +11,25 @@ vocab = "vocab"
 delimiters = "delimiters"
 
 datasets = {
-    "arivale_proteins": {name: "gene_name", ids: ["uniprot", "gene_id"]},
-    "arivale_labs": {name: "Display Name", ids: ["Labcorp LOINC ID", "Quest LOINC ID"]},
-    "arivale_metabolites": {
+    "arivale_proteins.tsv": {name: "gene_name", ids: ["uniprot", "gene_id"]},
+    "arivale_labs.tsv": {name: "Display Name", ids: ["Labcorp LOINC ID", "Quest LOINC ID"]},
+    "arivale_metabolites.tsv": {
         name: "CHEMICAL_NAME",
         ids: ["CAS", "KEGG", "HMDB", "PUBCHEM", "INCHIKEY", "SMILES"],
         vocab: "refmet",
     },
-    "arivale_lipids": {name: "CHEMICAL_NAME", ids: ["HMDB", "KEGG"], vocab: "HMDB"},
-    "ukbb_proteins": {name: "Assay", ids: ["UniProt"], delimiters: ["_"]},
-    "ukbb_labs": {name: "field_name", ids: []},
-    "ukbb_metabolites": {
+    "arivale_lipids.tsv": {name: "CHEMICAL_NAME", ids: ["HMDB", "KEGG"], vocab: "HMDB"},
+    "ukbb_proteins.tsv": {name: "Assay", ids: ["UniProt"], delimiters: ["_"]},
+    "ukbb_labs.tsv": {name: "field_name", ids: []},
+    "ukbb_metabolites.tsv": {
         name: "nightingale_name",
         ids: ["source_chebi_id", "source_hmdb_id", "source_pubchem_id"],
         vocab: "refmet",
     },
-    "hpp_proteins": {name: "nightingale_name", ids: []},
+    "hpp_proteins.tsv": {name: "nightingale_name", ids: []},
+    "hpp_labs.csv": {name: "Description", ids: []},
+    "hpp_metabolites.tsv": {name: "nightingale_description", ids: []},
+    "hpp_lipids.tsv": {name: "Input.name", ids: [], vocab: "HMDB"},
 }
 
 datasets_dir = PROJECT_ROOT / "data" / "milestone"
@@ -36,11 +39,10 @@ mapper = Mapper()
 mode: AnnotationMode = "all"
 results_dir = datasets_dir / "results"
 
-for dataset_shortname, params in datasets.items():
-    logging.info(f"On dataset {dataset_shortname}")
-    entity_type = dataset_shortname.split("_")[1]
-    tsv_path = datasets_dir / f"{dataset_shortname}.tsv"
-    # TODO: make 'output_prefix' work for input paths as well, specify that? (vs. having to use certain file names) #45
+for dataset_filename, params in datasets.items():
+    entity_type = dataset_filename.split("_")[1].split(".")[0]
+    logging.info(f"On dataset {dataset_filename} (entity_type is: {entity_type}")
+    tsv_path = datasets_dir / dataset_filename
 
     mapper.map_dataset_to_kg(
         dataset=tsv_path,
@@ -54,12 +56,14 @@ for dataset_shortname, params in datasets.items():
     )
 
 
-viz = Visualizer()
+viz = Visualizer(
+    config={"row_order": ["proteins", "metabolites", "lipids", "labs"], "col_order": ["arivale", "ukbb", "hpp"]}
+)
 viz_dir = results_dir / "viz"
 
 stats_df = viz.aggregate_stats(stats_dir=results_dir)
 suffix = f"- KRAKEN (mode={mode})"
 
-viz.render_heatmap(df=stats_df, output_path=viz_dir / f"heatmap_{mode}", title=f"Mapping Summary {suffix}")
+viz.render_heatmap(df=stats_df, output_path=viz_dir / f"heatmap_{mode}", title=f"Mapping Coverage {suffix}")
 
 viz.render_breakdown(df=stats_df, output_path=viz_dir / f"breakdown_{mode}", title=f"Mapping Breakdown {suffix}")
