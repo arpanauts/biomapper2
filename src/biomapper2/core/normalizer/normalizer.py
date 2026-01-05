@@ -13,8 +13,13 @@ from typing import Any
 
 import pandas as pd
 
-from ...config import BIOLINK_VERSION_DEFAULT
-from ...utils import ALIASES_PROP, CLEANER_PROP, VALIDATOR_PROP, to_list
+from ...biolink_client import BiolinkClient
+from ...utils import (
+    ALIASES_PROP,
+    CLEANER_PROP,
+    VALIDATOR_PROP,
+    to_list,
+)
 from . import cleaners
 from .vocab_config import load_prefix_info, load_validator_map
 
@@ -27,12 +32,12 @@ class Normalizer:
     using Biolink model prefix mappings.
     """
 
-    def __init__(self, biolink_version: str | None = None):
+    def __init__(self, biolink_client: BiolinkClient | None = None):
         self.validator_prop = VALIDATOR_PROP
         self.cleaner_prop = CLEANER_PROP
         self.aliases_prop = ALIASES_PROP
-        self.biolink_version = biolink_version if biolink_version else BIOLINK_VERSION_DEFAULT
-        self.vocab_info_map = load_prefix_info(self.biolink_version)
+        self.biolink_client = biolink_client if biolink_client else BiolinkClient()
+        self.vocab_info_map = load_prefix_info(self.biolink_client)
         self.vocab_validator_map = load_validator_map()
         self.field_name_to_vocab_name_cache: dict[str, set[str]] = dict()
         self.dashes = {"-", "–", "—", "−", "‐", "‑", "‒"}
@@ -198,7 +203,7 @@ class Normalizer:
         Uses heuristic matching against known vocab names and aliases.
 
         Args:
-            id_field_name: Name of ID field/column (e.g., "CHEBI ID", "Labcorp LOINC id"
+            id_field_name: Name of ID field/column (e.g., "CHEBI ID", "Labcorp LOINC id")
 
         Returns:
             Set of matching vocabulary names (in standardized form)
@@ -253,6 +258,25 @@ class Normalizer:
                 return matches_on_substring
 
             return None
+
+    def get_standard_prefix(self, vocab: str | list[str] | None) -> list[str]:
+        logging.info(f"Determining standard prefix for input vocab(s): {vocab}")
+        vocabs = to_list(vocab)
+        prefixes = set()
+        for vocab_name in vocabs:
+            matching_normalized_vocabs = self.determine_vocab(vocab_name)
+            if matching_normalized_vocabs:
+                logging.info(f"Matching normalized names for vocab '{vocab_name}' are: {matching_normalized_vocabs}")
+                for matching_vocab in matching_normalized_vocabs:
+                    prefix = self.vocab_info_map[matching_vocab]["prefix"]
+                    prefixes.add(prefix)
+                    logging.info(f"Standardized prefix for normalized vocab '{matching_vocab}' is: {prefix}")
+            else:
+                raise ValueError(
+                    f"Failed to standardize vocab name '{vocab_name}' - valid vocabs are: "
+                    f"{self.vocab_validator_map.keys()}"
+                )
+        return list(prefixes)
 
     def is_valid_id(self, local_id: str, vocab_name_cleaned: str) -> tuple[bool, str]:
         """

@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .biolink_client import BiolinkClient
 from .config import PROJECT_ROOT
 from .core.analysis import analyze_dataset_mapping
 from .core.annotation_engine import AnnotationEngine
@@ -37,8 +38,9 @@ class Mapper:
 
     def __init__(self, biolink_version: str | None = None):
         # Instantiate the mapping modules (should only be done once, up front)
-        self.annotation_engine = AnnotationEngine()
-        self.normalizer = Normalizer(biolink_version=biolink_version)
+        self.biolink_client = BiolinkClient(biolink_version=biolink_version)
+        self.annotation_engine = AnnotationEngine(biolink_client=self.biolink_client)
+        self.normalizer = Normalizer(biolink_client=self.biolink_client)
         self.linker = Linker()
         self.resolver = Resolver()
 
@@ -48,6 +50,7 @@ class Mapper:
         name_field: str,
         provided_id_fields: list[str],
         entity_type: str,
+        vocab: str | list[str] | None = None,
         array_delimiters: list[str] | None = None,
         stop_on_invalid_id: bool = False,
         annotation_mode: AnnotationMode = "missing",
@@ -61,6 +64,7 @@ class Mapper:
             name_field: Field containing entity name
             provided_id_fields: List of fields containing vocab identifiers
             entity_type: Type of entity (e.g., 'metabolite', 'protein')
+            vocab: Allowed vocab name(s) to map to (e.g., 'refmet', 'mondo')
             array_delimiters: Characters used to split delimited ID strings (default: [',', ';'])
             stop_on_invalid_id: Halt execution on invalid IDs (default: False)
             annotation_mode: When to annotate
@@ -76,12 +80,17 @@ class Mapper:
         array_delimiters = array_delimiters if array_delimiters is not None else [",", ";"]
         mapped_item = copy.deepcopy(item)  # Use a copy to avoid editing input item
 
+        # Validate/standardize the input entity type and vocab(s) on Biolink
+        entity_type = self.biolink_client.standardize_entity_type(entity_type)
+        prefixes = self.normalizer.get_standard_prefix(vocab)
+
         # Do Step 1: annotate with vocab IDs
         annotation_result = self.annotation_engine.annotate(
             item=mapped_item,
             name_field=name_field,
             provided_id_fields=provided_id_fields,
-            entity_type=entity_type,
+            category=entity_type,
+            prefixes=prefixes,
             mode=annotation_mode,
             annotators=annotators,
         )
@@ -116,6 +125,7 @@ class Mapper:
         entity_type: str,
         name_column: str,
         provided_id_columns: list[str],
+        vocab: str | list[str] | None = None,
         array_delimiters: list[str] | None = None,
         output_prefix: str | None = None,
         output_dir: str | Path | None = PROJECT_ROOT / "results",
@@ -130,6 +140,7 @@ class Mapper:
             entity_type: Type of entities (e.g., 'metabolite', 'protein')
             name_column: Column containing entity names
             provided_id_columns: Columns containing (un-normalized) vocab identifiers
+            vocab: Allowed vocab name(s) to map to (e.g., 'CHEBI', 'MONDO')
             array_delimiters: Characters used to split delimited ID strings (default: [',', ';'])
             annotation_mode: When to annotate
                 - 'all': Annotate all entities
@@ -144,6 +155,10 @@ class Mapper:
         """
         logging.info(f"Beginning to map dataset to KG ({dataset})")
         array_delimiters = array_delimiters if array_delimiters is not None else [",", ";"]
+
+        # Validate/standardize the input entity type and vocab(s) on Biolink
+        entity_type = self.biolink_client.standardize_entity_type(entity_type)
+        prefixes = self.normalizer.get_standard_prefix(vocab)
 
         # Ensure the results directory for output files exists
         logging.info(f"Output dir path is: {output_dir}")
@@ -187,7 +202,8 @@ class Mapper:
             item=df,
             name_field=name_column,
             provided_id_fields=provided_id_columns,
-            entity_type=entity_type,
+            category=entity_type,
+            prefixes=prefixes,
             mode=annotation_mode,
             annotators=annotators,
         )

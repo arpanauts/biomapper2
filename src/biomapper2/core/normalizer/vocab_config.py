@@ -1,33 +1,23 @@
 """Vocabulary configuration for loading Biolink prefixes and validator mappings."""
 
-import json
-import logging
 from typing import Any
 
-import requests
-import yaml
-
-from ...config import CACHE_DIR
+from ...biolink_client import BiolinkClient
 from ...utils import ALIASES_PROP, CLEANER_PROP, VALIDATOR_PROP
 from . import cleaners, validators
 
 
-def load_prefix_info(biolink_version: str) -> dict[str, dict[str, str]]:
+def load_prefix_info(biolink_client: BiolinkClient) -> dict[str, dict[str, str]]:
     """
     Load Biolink model prefix map and add custom entries.
 
     Args:
-        biolink_version: Biolink model version string
+        biolink_client: Biolink Client
 
     Returns:
         Dictionary mapping lowercase prefixes to {prefix, iri}
     """
-    logging.debug(f"Grabbing biolink prefix map for version: {biolink_version}")
-    url = (
-        f"https://raw.githubusercontent.com/biolink/biolink-model/refs/tags/v{biolink_version}/"
-        f"project/prefixmap/biolink-model-prefix-map.json"
-    )
-    prefix_to_iri_map = _load_biolink_file(url, biolink_version)
+    prefix_to_iri_map = biolink_client.get_prefix_map()
 
     # Add prefixes as needed (ones we're making up, that don't exist in biolink)
     prefix_to_iri_map["USZIPCODE"] = "https://www.unitedstateszipcodes.org/"
@@ -256,40 +246,3 @@ def load_validator_map() -> dict[str, dict[str, Any]]:
         "zfa": {validator: validators.is_zfa_id},
         "zfin": {validator: validators.is_zfin_id},
     }
-
-
-def _load_biolink_file(url: str, biolink_version: str) -> dict:
-    """
-    Download and cache Biolink model file.
-
-    Args:
-        url: URL to Biolink JSON/YAML file
-        biolink_version: Version string for cache naming
-
-    Returns:
-        Parsed JSON content
-    """
-    file_name = url.split("/")[-1]
-    file_name_json = file_name.split(".")[0] + f"_{biolink_version}" + ".json"
-    local_path = CACHE_DIR / file_name_json
-    logging.debug(f"Local file path is: {local_path}")
-
-    # Download the file if we don't already have it cached
-    if not local_path.exists():
-        logging.info(f"Downloading YAML file from {url}. local path is: {local_path}")
-        response = requests.get(url)
-        response.raise_for_status()
-        if file_name.endswith(".yaml"):
-            response_json = yaml.safe_load(response.text)
-        else:
-            response_json = response.json()
-
-        # Cache the response
-        CACHE_DIR.mkdir(parents=True, exist_ok=True)
-        with open(local_path, "w+") as cache_file:
-            json.dump(response_json, cache_file, indent=2)
-
-    # Read and return the cached JSON
-    with open(local_path) as cache_file:
-        contents = json.load(cache_file)
-        return contents

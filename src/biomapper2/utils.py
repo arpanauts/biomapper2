@@ -9,13 +9,11 @@ from collections.abc import Iterable
 from datetime import timedelta
 from typing import Any, Literal, TypeGuard, cast
 
-import inflect
 import pandas as pd
 import requests
 import requests_cache
-from bmt import Toolkit
 
-from .config import BIOLINK_VERSION_DEFAULT, CACHE_DIR, KESTREL_API_KEY, KESTREL_API_URL, LOG_LEVEL
+from .config import CACHE_DIR, KESTREL_API_KEY, KESTREL_API_URL, LOG_LEVEL
 
 # Type alias for annotation results structure
 # Structure: {annotator: {vocabulary: {local_id: result_metadata_dict}}}
@@ -49,76 +47,6 @@ def text_is_not_empty(value: Any) -> TypeGuard[str]:
     return isinstance(value, str) and value.strip() != ""
 
 
-def initialize_biolink_model_toolkit(biolink_version: str | None = None) -> Toolkit:
-    version = biolink_version if biolink_version else BIOLINK_VERSION_DEFAULT
-    url = f"https://raw.githubusercontent.com/biolink/biolink-model/refs/tags/v{version}/biolink-model.yaml"
-    logging.info("Initializing bmt (Biolink Model Toolkit)...")
-    bmt = Toolkit(schema=url)
-    return bmt
-
-
-def standardize_entity_type(entity_type: str, bmt: Toolkit) -> str:
-    # Map any aliases to their corresponding biolink category
-    entity_type_singular = singularize(entity_type.removeprefix("biolink:"))
-    entity_type_cleaned = "".join(entity_type_singular.lower().split())
-    aliases = {
-        "metabolite": "SmallMolecule",
-        "lipid": "SmallMolecule",
-        "clinicallab": "ClinicalFinding",
-        "lab": "ClinicalFinding",
-    }
-    category_raw = aliases.get(entity_type_cleaned, entity_type_cleaned)
-
-    if bmt.is_category(category_raw):
-        category_element = bmt.get_element(category_raw)
-        if category_element:
-            return category_element["class_uri"]
-
-    message = (
-        f"Could not find valid Biolink category for entity type '{entity_type}'. "
-        f"Valid entity types are: {bmt.get_descendants('NamedThing')}. Or accepted aliases are: {aliases}. "
-        f"Will proceed with top-level Biolink category of NamedThing (Annotators may be overselected/not used ideally)."
-    )
-    logging.warning(message)
-    return "NamedThing"
-
-
-def get_descendants(category: str, bmt: Toolkit) -> set[str]:
-    # Get Biolink descendants of the given category (includes self)
-    if bmt.is_category(category):
-        return set(bmt.get_descendants(category, formatted=True, mixin=True, reflexive=True))
-    else:
-        message = (
-            f"Category '{category}' is not a valid biolink category. Valid categories are: "
-            f"{bmt.get_descendants('NamedThing')}."
-        )
-        raise ValueError(message)
-
-
-def singularize(phrase: str) -> str:
-    """Singularize the last word of a phrase.
-
-    Examples:
-        "metabolites" -> "metabolite"
-        "amino acids" -> "amino acid"
-        "classes" -> "class"
-    """
-    _inflect_engine = inflect.engine()
-
-    words = phrase.split()
-    if not words:
-        return phrase
-
-    last_word = words[-1]
-    singular = _inflect_engine.singular_noun(last_word)
-
-    # singular_noun returns False if the word is already singular
-    if singular:
-        words[-1] = singular
-
-    return " ".join(words)
-
-
 def to_list(
     item: str | Iterable[str] | int | Iterable[int] | float | Iterable[float] | None,
 ) -> list[str | int | float]:
@@ -130,6 +58,17 @@ def to_list(
         return [item]
     else:
         return list(item)
+
+
+def to_set(item: str | Iterable[str] | int | Iterable[int] | float | Iterable[float] | None) -> set[str | int | float]:
+    if item is None:
+        return set()
+    elif isinstance(item, set):
+        return cast(set[str | int | float], item)
+    elif isinstance(item, (str, int, float)):
+        return {item}
+    else:
+        return set(item)
 
 
 def safe_divide(numerator, denominator) -> float | None:
