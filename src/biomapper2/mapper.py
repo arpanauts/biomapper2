@@ -13,6 +13,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
+from .config import PROJECT_ROOT
 from .core.analysis import analyze_dataset_mapping
 from .core.annotation_engine import AnnotationEngine
 from .core.linker import Linker
@@ -117,6 +118,7 @@ class Mapper:
         provided_id_columns: list[str],
         array_delimiters: list[str] | None = None,
         output_prefix: str | None = None,
+        output_dir: str | Path | None = PROJECT_ROOT / "results",
         annotation_mode: AnnotationMode = "missing",
         annotators: list[str] | None = None,
     ) -> tuple[str, dict[str, Any]]:
@@ -134,6 +136,7 @@ class Mapper:
                 - 'missing': Only annotate entities without provided_ids (default)
                 - 'none': Skip annotation entirely (returns empty)
             output_prefix: Optional path to save the output TSV file
+            output_dir: Optional path to directory to save output/result files in
             annotators: Optional list of annotators to use (by slug). If None, annotators are selected automatically.
 
         Returns:
@@ -142,18 +145,23 @@ class Mapper:
         logging.info(f"Beginning to map dataset to KG ({dataset})")
         array_delimiters = array_delimiters if array_delimiters is not None else [",", ";"]
 
+        # Ensure the results directory for output files exists
+        logging.info(f"Output dir path is: {output_dir}")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
         # TODO: how to handle other data types, like .txt?
         # TODO: let file output location be configurable? #11
         # Issue: if dataset is a pandas df, need to create some default filename
         # naively create a default output filename (input_df_MAPPED) if output_prefix not provided
 
+        output_suffix = "_MAPPED.tsv"
         if isinstance(dataset, pd.DataFrame):
             df = dataset
-            output_tsv_path = "input_df_MAPPED.tsv" if output_prefix is None else f"{output_prefix}_MAPPED.tsv"
+            output_tsv_name = f"input_df{output_suffix}" if output_prefix is None else f"{output_prefix}{output_suffix}"
         elif isinstance(dataset, (str, Path)):
             dataset = str(dataset)
             # Load tsv into pandas
-            output_tsv_path = dataset.replace(".tsv", "_MAPPED.tsv").replace(".csv", "_MAPPED.tsv")
+            output_tsv_name = Path(dataset).name.replace(".tsv", output_suffix).replace(".csv", output_suffix)
             if dataset.endswith(".tsv"):
                 df = pd.read_csv(dataset, sep="\t", dtype={id_col: str for id_col in provided_id_columns}, comment="#")
             elif dataset.endswith(".csv"):
@@ -165,6 +173,9 @@ class Mapper:
                 f"Unsupported type of '{type(dataset)}' for 'dataset' parameter; "
                 f"only str, Path, or pd.DataFrame are supported"
             )
+        logging.info(f"Output tsv name is: {output_tsv_name}")
+        output_tsv_path = output_dir / output_tsv_name
+        logging.info(f"output tsv path is: {output_tsv_path}")
 
         # Do some basic cleanup to try to ensure empty cells are represented consistently
         df[provided_id_columns] = df[provided_id_columns].replace("-", np.nan)
