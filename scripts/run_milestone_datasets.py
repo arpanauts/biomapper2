@@ -10,6 +10,9 @@ ids = "id_cols"
 vocab = "vocab"
 delimiters = "delimiters"
 
+metabolite_vocabs = ["refmet", "HMDB"]
+lipid_vocabs = ["HMDB", "LM", "refmet"]
+
 
 datasets = {
     "arivale_proteins.tsv": {name: "gene_name", ids: ["uniprot", "gene_id"]},
@@ -17,20 +20,20 @@ datasets = {
     "arivale_metabolites.tsv": {
         name: "CHEMICAL_NAME",
         ids: ["CAS", "KEGG", "HMDB", "PUBCHEM", "INCHIKEY", "SMILES"],
-        vocab: "refmet",
+        vocab: metabolite_vocabs,
     },
-    "arivale_lipids.tsv": {name: "CHEMICAL_NAME", ids: ["HMDB", "KEGG"], vocab: "HMDB"},
+    "arivale_lipids.tsv": {name: "CHEMICAL_NAME", ids: ["HMDB", "KEGG"], vocab: lipid_vocabs},
     "ukbb_proteins.tsv": {name: "Assay", ids: ["UniProt"], delimiters: ["_"]},
     "ukbb_labs.tsv": {name: "field_name", ids: []},
     "ukbb_metabolites.tsv": {
         name: "nightingale_name",
         ids: ["source_chebi_id", "source_hmdb_id", "source_pubchem_id"],
-        vocab: "refmet",
+        vocab: metabolite_vocabs,
     },
     "hpp_proteins.tsv": {name: "nightingale_name", ids: []},
     "hpp_labs.csv": {name: "Description", ids: []},
-    "hpp_metabolites.tsv": {name: "nightingale_description", ids: []},
-    "hpp_lipids.tsv": {name: "Input.name", ids: [], vocab: "HMDB"},
+    "hpp_metabolites.tsv": {name: "nightingale_description", ids: [], vocab: metabolite_vocabs},
+    "hpp_lipids.tsv": {name: "Input.name", ids: [], vocab: lipid_vocabs},
 }
 
 datasets_dir = PROJECT_ROOT / "data" / "milestone"
