@@ -34,7 +34,7 @@ class BaseAnnotator(ABC):  # Inherit from ABC
         entity: dict | pd.Series,
         name_field: str,
         category: str,
-        prefixes: list[str],
+        prefixes: list[str] | None = None,
         cache: dict | None = None,
     ) -> AssignedIDsDict:
         """
@@ -54,7 +54,7 @@ class BaseAnnotator(ABC):  # Inherit from ABC
 
     @abstractmethod
     def get_annotations_bulk(
-        self, entities: pd.DataFrame, name_field: str, category: str, prefixes: list[str]
+        self, entities: pd.DataFrame, name_field: str, category: str, prefixes: list[str] | None = None
     ) -> pd.Series:  # Series of AssignedIdsDicts
         """
         Get annotations for multiple entities with bulk API call.

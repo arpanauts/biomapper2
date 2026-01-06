@@ -40,7 +40,12 @@ class MetabolomicsWorkbenchAnnotator(BaseAnnotator):
         )
 
     def get_annotations(
-        self, entity: dict | pd.Series, name_field: str, category: str, prefixes: list[str], cache: dict | None = None
+        self,
+        entity: dict | pd.Series,
+        name_field: str,
+        category: str,
+        prefixes: list[str] | None = None,
+        cache: dict | None = None,
     ) -> AssignedIDsDict:
         """Implements BaseAnnotator.get_annotations"""
 
@@ -73,7 +78,11 @@ class MetabolomicsWorkbenchAnnotator(BaseAnnotator):
         return {self.slug: annotations}
 
     def get_annotations_bulk(
-        self, entities: pd.DataFrame, name_field: str, category: str, prefixes: list[str]
+        self,
+        entities: pd.DataFrame,
+        name_field: str,
+        category: str,
+        prefixes: list[str] | None = None,
     ) -> pd.Series:
         """Implements BaseAnnotator.get_annotations_bulk"""
 

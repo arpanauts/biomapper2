@@ -5,9 +5,8 @@ Provides logging setup and mathematical helpers for metric calculations.
 """
 
 import logging
-from collections.abc import Iterable
 from datetime import timedelta
-from typing import Any, Literal, TypeGuard, cast
+from typing import Any, Literal, TypeGuard
 
 import pandas as pd
 import requests
@@ -47,24 +46,22 @@ def text_is_not_empty(value: Any) -> TypeGuard[str]:
     return isinstance(value, str) and value.strip() != ""
 
 
-def to_list(
-    item: str | Iterable[str] | int | Iterable[int] | float | Iterable[float] | None,
-) -> list[str | int | float]:
+def to_list(item: Any) -> list[Any]:
     if item is None:
         return []
     elif isinstance(item, list):
-        return cast(list[str | int | float], item)
+        return item
     elif isinstance(item, (str, int, float)):
         return [item]
     else:
         return list(item)
 
 
-def to_set(item: str | Iterable[str] | int | Iterable[int] | float | Iterable[float] | None) -> set[str | int | float]:
+def to_set(item: Any) -> set[Any]:
     if item is None:
         return set()
     elif isinstance(item, set):
-        return cast(set[str | int | float], item)
+        return item
     elif isinstance(item, (str, int, float)):
         return {item}
     else:

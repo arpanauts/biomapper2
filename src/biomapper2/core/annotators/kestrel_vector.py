@@ -16,7 +16,7 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
         entity: dict | pd.Series,
         name_field: str,
         category: str,
-        prefixes: list[str],
+        prefixes: list[str] | None = None,
         cache: dict | None = None,
     ) -> AssignedIDsDict:
         """Implements BaseAnnotator.get_annotations"""
@@ -49,7 +49,7 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
         entities: pd.DataFrame,
         name_field: str,
         category: str,
-        prefixes: list[str],
+        prefixes: list[str] | None = None,
     ) -> pd.Series:  # Series of AssignedIDsDicts
         """Implements BaseAnnotator.get_annotations_bulk"""
 
@@ -70,7 +70,7 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
 
     @staticmethod
     def _kestrel_vector_search(
-        search_text: str | list[str], category: str, prefixes: list[str], limit: int = 10
+        search_text: str | list[str], category: str, prefixes: list[str] | None, limit: int = 10
     ) -> dict[str, list[dict]]:
         """Call Kestrel vector search endpoint."""
         payload = {"search_text": search_text, "limit": limit, "category_filter": category, "prefix_filter": prefixes}

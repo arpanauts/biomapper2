@@ -261,7 +261,7 @@ class Normalizer:
 
     def get_standard_prefix(self, vocab: str | list[str] | None) -> list[str]:
         logging.info(f"Determining standard prefix for input vocab(s): {vocab}")
-        vocabs = to_list(vocab)
+        vocabs: list[str] = to_list(vocab)
         prefixes = set()
         for vocab_name in vocabs:
             matching_normalized_vocabs = self.determine_vocab(vocab_name)

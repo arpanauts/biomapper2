@@ -128,7 +128,7 @@ class Mapper:
         vocab: str | list[str] | None = None,
         array_delimiters: list[str] | None = None,
         output_prefix: str | None = None,
-        output_dir: str | Path | None = PROJECT_ROOT / "results",
+        output_dir: str | Path = PROJECT_ROOT / "results",
         annotation_mode: AnnotationMode = "missing",
         annotators: list[str] | None = None,
     ) -> tuple[str, dict[str, Any]]:
@@ -146,7 +146,7 @@ class Mapper:
                 - 'all': Annotate all entities
                 - 'missing': Only annotate entities without provided_ids (default)
                 - 'none': Skip annotation entirely (returns empty)
-            output_prefix: Optional path to save the output TSV file
+            output_prefix: Optional prefix for the output TSV file name
             output_dir: Optional path to directory to save output/result files in
             annotators: Optional list of annotators to use (by slug). If None, annotators are selected automatically.
 
@@ -161,6 +161,7 @@ class Mapper:
         prefixes = self.normalizer.get_standard_prefix(vocab)
 
         # Ensure the results directory for output files exists
+        output_dir = Path(output_dir)
         logging.info(f"Output dir path is: {output_dir}")
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -242,4 +243,4 @@ class Mapper:
 
         stats_summary = analyze_dataset_mapping(output_tsv_path, self.linker, annotation_mode)
 
-        return output_tsv_path, stats_summary
+        return str(output_tsv_path), stats_summary

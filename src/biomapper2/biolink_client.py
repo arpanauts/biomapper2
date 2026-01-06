@@ -1,6 +1,7 @@
 import json
 import logging
 from collections.abc import Iterable
+from typing import cast
 
 import inflect
 import requests
@@ -138,7 +139,7 @@ class BiolinkClient:
             return phrase
 
         last_word = words[-1]
-        singular = _inflect_engine.singular_noun(last_word)
+        singular = _inflect_engine.singular_noun(cast(inflect.Word, last_word))
 
         # singular_noun returns False if the word is already singular
         if singular:
