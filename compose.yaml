@@ -1,0 +1,32 @@
+services:
+  biomapper2:
+    build:
+      context: .
+      target: prod
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/api/v1/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    profiles:
+      - prod
+
+  biomapper2-dev:
+    build:
+      context: .
+      target: dev
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    volumes:
+      - ./src:/app/src
+      - ./tests:/app/tests
+    profiles:
+      - dev
