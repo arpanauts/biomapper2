@@ -1,0 +1,34 @@
+.git
+.github
+.venv
+.uv
+.pytest_cache
+.ruff_cache
+.mypy_cache
+__pycache__
+*.pyc
+
+# Data and results (large, not needed in image)
+cache/
+results/
+data/raw/
+data/processed/
+
+# Secrets
+.env
+
+# IDE / OS
+.vscode
+.idea
+.DS_Store
+Thumbs.db
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb
+
+# Serena
+.serena/
+
+# Claude
+.claude/

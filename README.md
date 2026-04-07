@@ -14,6 +14,16 @@ All CURIEs are represented in [Biolink](https://github.com/biolink/biolink-model
 
 ⚠️ **Note**: This package is in active development. Feedback and issues welcome!
 
+### Quick access via PyPI
+
+If you just want to **map entities against the hosted production API** without running your own server, install the lightweight client package:
+
+```bash
+pip install ddharmon
+```
+
+See [ddharmon on PyPI](https://pypi.org/project/ddharmon/) for usage. It wraps the same REST API documented below, pointed at the production Kestrel instance.
+
 ## Setup
 
 ### Install uv (if not already installed)
@@ -34,12 +44,11 @@ uv sync --dev
 
 This will create a virtual environment and install all dependencies.
 
-Then just create a `.env` file with the proper secrets:
+Then create a `.env` file from the template:
 ```bash
-cd biomapper2
 cp .env.example .env
 ```
-And edit `.env` so that it has the actual secrets instead of placeholders.
+Edit `.env` to fill in your `KESTREL_API_KEY`. The file also contains `KESTREL_API_URL` and optional API authentication settings — see the comments in `.env.example` for details.
 
 Then [run the pytest suite](#run-tests) to confirm all is working.
 
@@ -82,6 +91,73 @@ mapper.map_dataset_to_kg(
 )
 ```
 See `examples/` for complete working examples.
+
+## REST API
+
+biomapper2 includes a FastAPI server that exposes the mapping pipeline over HTTP.
+
+### Run the server
+
+```bash
+# Local development (with hot reload)
+uv run uvicorn biomapper2.api.main:app --reload --port 8001
+
+# Or via Docker
+docker compose --profile prod up -d
+```
+
+The API docs are available at:
+- **Swagger UI**: http://localhost:8001/api/v1/docs
+- **ReDoc**: http://localhost:8001/api/v1/redoc
+- **OpenAPI spec**: http://localhost:8001/api/v1/openapi.json
+
+### Endpoints
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/health` | Health check (no auth required) |
+| GET | `/api/v1/entity-types` | List supported entity types |
+| GET | `/api/v1/annotators` | List available annotators |
+| GET | `/api/v1/vocabularies` | List supported vocabularies |
+| POST | `/api/v1/map/entity` | Map a single entity |
+| POST | `/api/v1/map/batch` | Map multiple entities (max 1000) |
+| POST | `/api/v1/map/dataset` | Map an uploaded TSV/CSV file |
+| POST | `/api/v1/map/dataset/stream` | Stream mapping results as NDJSON |
+
+### Authentication
+
+Set `BIOMAPPER_API_KEY` or `BIOMAPPER2_API_KEYS` (comma-separated) in your `.env` file to require API key authentication via the `X-API-Key` header. If no keys are configured, the API runs in open-access mode.
+
+## Docker
+
+### Quick start
+
+```bash
+cp .env.example .env    # then edit .env with your KESTREL_API_KEY
+
+docker compose --profile prod up -d
+curl http://localhost:8001/api/v1/health
+```
+
+### Development
+
+```bash
+# Start with live code reload (mounts src/ and tests/)
+docker compose --profile dev up
+
+# Run tests inside the container
+docker compose --profile dev run --rm biomapper2-dev uv run pytest -m "not integration" -v
+
+# Run quality checks
+docker compose --profile dev run --rm biomapper2-dev ./scripts/check.sh
+```
+
+### Building manually
+
+```bash
+docker build --target prod -t biomapper2 .       # Production image
+docker build --target dev -t biomapper2:dev .     # Development image
+```
 
 ### Generate KG-performance across datasets
 ```python
@@ -135,7 +211,13 @@ Run all code quality checks before committing:
 ```
 src/biomapper2/
 ├── mapper.py                   # Main Mapper class - entry point for entity/dataset mapping
+├── models.py                   # Pydantic Entity model for type-safe pipeline processing
 ├── config.py                   # Configuration (KG API endpoint, logging, etc.)
+├── api/                        # FastAPI REST API
+│   ├── main.py                 # Application setup, middleware, lifespan
+│   ├── auth.py                 # API key authentication
+│   ├── models/                 # Request/response Pydantic models
+│   └── routes/                 # Endpoint implementations (mapping, discovery)
 ├── core/
 │   ├── annotation_engine.py    # Orchestrates annotation of entities with ontology local IDs
 │   ├── annotators/             # Individual annotator implementations (Kestrel text search, etc.)
@@ -148,9 +230,11 @@ src/biomapper2/
 │   │   └── vocab_config.py     # Biolink prefix mappings and validator configurations
 │   ├── linker.py               # Links curies to knowledge graph nodes
 │   └── resolver.py             # Resolves one-to-many entity→KG matches
-└── utils.py                    # Utility functions
+├── utils.py                    # Utility functions
 └── visualizer.py               # Visualize KG performance across datasets
 
+Dockerfile                      # Multi-stage build (builder → dev → prod)
+compose.yaml                    # Docker Compose with prod and dev profiles
 examples/                       # Working code examples
 tests/                          # Pytest test suite
 data/                           # Example and groundtruth datasets
@@ -159,7 +243,10 @@ scripts/                        # Development scripts (check.sh, fix.sh)
 
 ### Configuration
 
-Edit `src/biomapper2/config.py` to customize:
-- `KESTREL_API_URL` - Knowledge graph API endpoint (default: production server)
+Environment variables (set in `.env`):
+- `KESTREL_API_URL` - Knowledge graph API endpoint (defaults to production)
+- `KESTREL_API_KEY` - API key for the Kestrel API
+
+Additional settings in `src/biomapper2/config.py`:
 - `BIOLINK_VERSION_DEFAULT` - Default Biolink model version
 - `LOG_LEVEL` - Logging verbosity (DEBUG, INFO, WARNING, ERROR, CRITICAL)
