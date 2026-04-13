@@ -44,7 +44,14 @@ jobs:
             sudo systemctl restart biomapper2-api
 
             # Wait for service to start
-            sleep 5
+            # Replace: sleep 5                                             
+            # With a retry loop that waits up to 60 seconds                
+            for i in {1..12}; do                                           
+              curl -sf http://localhost:8001/api/v1/health && break        
+              echo "Waiting for API to start... ($i/12)"                   
+              sleep 5                                                      
+            done                                                           
+            curl -sf http://localhost:8001/api/v1/health || exit 1 
 
             # Health check
             curl -sf http://localhost:8001/api/v1/health || exit 1
