@@ -713,7 +713,7 @@ class Visualizer:
             output_path: Optional path to save figure (without extension).
             figsize: Figure size ``(width, height)``.
         """
-        df_filt = df[df["annotator"] == annotator].copy()
+        df_filt = df[(df["annotator"] == annotator) & df["precision"].notna() & df["recall"].notna()].copy()
 
         fig, ax = plt.subplots(figsize=figsize, layout="constrained")
 
@@ -745,18 +745,31 @@ class Visualizer:
                 edgecolors="black",
                 linewidths=0.5,
                 alpha=0.8,
+                zorder=5,
             )
             for _, row in subset.iterrows():
-                texts.append(ax.text(row["precision"], row["recall"], row["dataset"], fontsize=8, alpha=0.7))
+                texts.append(
+                    ax.annotate(
+                        row["dataset"],
+                        (row["precision"], row["recall"]),
+                        fontsize=8,
+                        zorder=6,
+                    )
+                )
 
-        adjust_text(texts, ax=ax)
+        adjust_text(
+            texts,
+            ax=ax,
+            force_text=(1.5, 1.5),
+            arrowprops=dict(arrowstyle="-", color="gray", alpha=0.5, lw=0.8),
+        )
 
         ax.set_xlim(0, 1.05)
         ax.set_ylim(0, 1.05)
         ax.set_xlabel("Precision", fontsize=11)
         ax.set_ylabel("Recall", fontsize=11)
         ax.set_title("Precision vs Recall (with F1 Contours)", fontweight="bold", fontsize=12)
-        ax.legend(loc="lower left", framealpha=0.9)
+        ax.legend(loc="upper left", bbox_to_anchor=(1.02, 1), framealpha=0.9)
         ax.set_aspect("equal")
         ax.grid(True, alpha=0.3)
 
