@@ -240,7 +240,7 @@ class Mapper:
         unique_kg_ids = [kid for kid in df["chosen_kg_id"].dropna().unique()]
         if unique_kg_ids:
             equiv_map = self.linker.get_equivalent_ids(unique_kg_ids)
-            df["kg_equivalent_ids"] = df["chosen_kg_id"].map(lambda kid: equiv_map.get(kid, []) if kid else [])
+            df["kg_equivalent_ids"] = df["chosen_kg_id"].map(lambda kid: [] if pd.isna(kid) else equiv_map.get(kid, []))
         else:
             df["kg_equivalent_ids"] = [[] for _ in range(len(df))]
         logging.info(f"After step 5 (equivalent IDs enrichment), df is: \n{df}")
