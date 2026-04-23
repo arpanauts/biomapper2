@@ -101,6 +101,43 @@ class Linker:
             batch_size=KESTREL_BATCH_SIZE_CANONICALIZE,
         )
 
+    @staticmethod
+    def get_equivalent_ids(kg_node_ids: list[str]) -> dict[str, list[str]]:
+        """
+        Fetch equivalent IDs for KG nodes from the Kestrel /get-nodes endpoint.
+
+        This is a non-critical enrichment step. On API failure, logs a warning
+        and returns an empty dict rather than raising.
+
+        Args:
+            kg_node_ids: List of KG node CURIEs to look up
+
+        Returns:
+            Dictionary mapping each node CURIE to its sorted list of equivalent IDs
+        """
+        if not kg_node_ids:
+            return {}
+
+        try:
+            raw_results = kestrel_request(
+                method="POST",
+                endpoint="get-nodes",
+                batch_field="curies",
+                batch_items=kg_node_ids,
+                batch_size=KESTREL_BATCH_SIZE_CANONICALIZE,
+                json={"slim": False, "truncate_long_fields": False},
+            )
+        except Exception:
+            logging.warning("Failed to fetch equivalent IDs from Kestrel /get-nodes; returning empty", exc_info=True)
+            return {}
+
+        # Extract equivalent_ids from each node object, sort for deterministic output
+        return {
+            curie: sorted(node_obj.get("equivalent_ids", []))
+            for curie, node_obj in raw_results.items()
+            if isinstance(node_obj, dict)
+        }
+
     def _format_kg_id_fields(
         self, entity: pd.Series | dict[str, Any], curie_to_kg_id_map: dict[str, str]
     ) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, dict[str, list[str]]]]:
