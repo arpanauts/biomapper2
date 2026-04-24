@@ -29,7 +29,7 @@ NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=/home/ubuntu/biomapper2/results /home/ubuntu/biomapper2/cache
+ReadWritePaths=/home/ubuntu/biomapper2/results /home/ubuntu/biomapper2/cache /home/ubuntu/.cache/uv /tmp
 
 [Install]
 WantedBy=multi-user.target
