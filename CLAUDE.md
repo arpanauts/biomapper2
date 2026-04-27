@@ -122,6 +122,44 @@ When implementing annotators:
 
 ---
 
+## Dev API Deployment
+
+Deploy a feature branch to `dev-biomapper.expertintheloop.io` (port 8003) for testing alongside production (port 8001).
+
+### Quick Deploy
+
+```bash
+ssh ubuntu@biomapper.expertintheloop.io
+cd ~/biomapper2-dev
+git fetch origin && git checkout <branch>
+~/.local/bin/uv sync
+# Start in tmux (or reattach existing session)
+tmux new -s biomapper2-dev
+~/.local/bin/uv run uvicorn biomapper2.api.main:app --host 127.0.0.1 --port 8003 --workers 1 2>&1 | tee ~/biomapper2-dev/app.log
+# Detach: Ctrl+B, D
+```
+
+### First-Time Setup
+
+```bash
+git clone https://github.com/Phenome-Health/biomapper2.git ~/biomapper2-dev
+cp ~/biomapper2/.env ~/biomapper2-dev/.env
+cd ~/biomapper2-dev && mkdir -p results cache
+```
+
+### Cleanup
+
+```bash
+tmux kill-session -t biomapper2-dev
+# Optionally remove: rm -rf ~/biomapper2-dev
+```
+
+### DNS Reference
+
+All subdomains for `expertintheloop.io` point to `35.161.242.62` (Lightsail static IP). DNS managed in Google Domains / Squarespace. Current A records: `@`, `www`, `link`, `kraken`, `pgsc`, `biomapper`, `biomapper2`, `analytics`, `dev-biomapper`.
+
+---
+
 ## Claude Code Workflow
 
 When using Claude Code to prepare PRs:
