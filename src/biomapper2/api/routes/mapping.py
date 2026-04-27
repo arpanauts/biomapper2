@@ -47,7 +47,7 @@ def extract_mapping_result(mapped_item: dict[str, Any] | pd.Series, original_nam
         name=original_name,
         curies=mapped_item.get("curies", []) or [],
         chosen_kg_id=mapped_item.get("chosen_kg_id"),
-        kg_equivalent_ids=mapped_item.get("kg_equivalent_ids", []) or [],
+        kg_equivalent_ids=mapped_item.get("kg_equivalent_ids", {}) or {},
         kg_ids=mapped_item.get("kg_ids", {}) or {},
         assigned_ids=mapped_item.get("assigned_ids", {}) or {},
         error=None,
@@ -330,7 +330,7 @@ async def map_dataset_stream(
                     "row_index": idx,
                     "name": entity.get(name_column, ""),
                     "chosen_kg_id": mapped.get("chosen_kg_id"),
-                    "kg_equivalent_ids": mapped.get("kg_equivalent_ids", []),
+                    "kg_equivalent_ids": mapped.get("kg_equivalent_ids", {}),
                     "curies": mapped.get("curies", []),
                     "kg_ids": mapped.get("kg_ids", {}),
                 }

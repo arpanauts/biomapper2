@@ -18,9 +18,9 @@ class EntityMappingResult(BaseModel):
     name: str = Field(..., description="Entity name")
     curies: list[str] = Field(default_factory=list, description="Normalized CURIEs for the entity")
     chosen_kg_id: str | None = Field(default=None, description="Best knowledge graph node ID chosen by resolution")
-    kg_equivalent_ids: list[str] = Field(
-        default_factory=list,
-        description="Equivalent identifiers from the resolved KG node",
+    kg_equivalent_ids: dict[str, list[str]] = Field(
+        default_factory=dict,
+        description="Equivalent identifiers from the resolved KG node, grouped by CURIE prefix",
     )
     kg_ids: dict[str, list[str]] = Field(
         default_factory=dict,

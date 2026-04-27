@@ -101,22 +101,56 @@ class Linker:
             batch_size=KESTREL_BATCH_SIZE_CANONICALIZE,
         )
 
+    # Default prefixes for equivalent_ids filtering — biomedically useful identifiers
+    DEFAULT_EQUIVALENT_ID_PREFIXES: list[str] = [
+        "CHEBI",
+        "CHEMBL.COMPOUND",
+        "DRUGBANK",
+        "ENSEMBL",
+        "GTOPDB",
+        "HGNC",
+        "HMDB",
+        "INCHIKEY",
+        "KEGG.COMPOUND",
+        "KEGG.DRUG",
+        "LIPIDMAPS",
+        "MESH",
+        "NCIT",
+        "PUBCHEM.COMPOUND",
+        "REFMET",
+        "RM",
+        "UNII",
+        "UniProtKB",
+    ]
+
     @staticmethod
-    def get_equivalent_ids(kg_node_ids: list[str]) -> dict[str, list[str]]:
+    def get_equivalent_ids(
+        kg_node_ids: list[str],
+        prefixes: list[str] | None = None,
+    ) -> dict[str, dict[str, list[str]]]:
         """
         Fetch equivalent IDs for KG nodes from the Kestrel /get-nodes endpoint.
+
+        Returns IDs grouped by CURIE prefix and filtered to biomedically useful
+        vocabularies by default. Pass prefixes=[] to get all equivalent IDs unfiltered.
 
         This is a non-critical enrichment step. On API failure, logs a warning
         and returns an empty dict rather than raising.
 
         Args:
             kg_node_ids: List of KG node CURIEs to look up
+            prefixes: CURIE prefixes to include (default: DEFAULT_EQUIVALENT_ID_PREFIXES).
+                      Pass empty list for no filtering.
 
         Returns:
-            Dictionary mapping each node CURIE to its sorted list of equivalent IDs
+            Dictionary mapping each node CURIE to a dict of {prefix: [local_ids]},
+            e.g. {"CHEBI:15365": {"HMDB": ["HMDB0001879"], "KEGG.COMPOUND": ["C01405"]}}
         """
         if not kg_node_ids:
             return {}
+
+        if prefixes is None:
+            prefixes = Linker.DEFAULT_EQUIVALENT_ID_PREFIXES
 
         try:
             raw_results = kestrel_request(
@@ -131,12 +165,23 @@ class Linker:
             logging.warning("Failed to fetch equivalent IDs from Kestrel /get-nodes; returning empty", exc_info=True)
             return {}
 
-        # Extract equivalent_ids from each node object, sort for deterministic output
-        return {
-            curie: sorted(node_obj.get("equivalent_ids", []))
-            for curie, node_obj in raw_results.items()
-            if isinstance(node_obj, dict)
-        }
+        result: dict[str, dict[str, list[str]]] = {}
+        for curie, node_obj in raw_results.items():
+            if not isinstance(node_obj, dict):
+                continue
+            raw_ids = node_obj.get("equivalent_ids", [])
+            grouped: dict[str, list[str]] = {}
+            for equiv_id in raw_ids:
+                if ":" not in equiv_id:
+                    continue
+                prefix, local_id = equiv_id.split(":", 1)
+                if prefixes and prefix not in prefixes:
+                    continue
+                grouped.setdefault(prefix, []).append(local_id)
+            # Sort local IDs within each prefix for deterministic output
+            result[curie] = {prefix: sorted(ids) for prefix, ids in sorted(grouped.items())}
+
+        return result
 
     def _format_kg_id_fields(
         self, entity: pd.Series | dict[str, Any], curie_to_kg_id_map: dict[str, str]

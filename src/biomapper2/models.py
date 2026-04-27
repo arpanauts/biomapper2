@@ -58,8 +58,8 @@ class Entity(BaseModel):
     chosen_kg_id_provided: str | None = None
     chosen_kg_id_assigned: str | None = None
 
-    # Enrichment step output — equivalent IDs for the chosen KG node
-    kg_equivalent_ids: list[str] = Field(default_factory=list)
+    # Enrichment step output — equivalent IDs for the chosen KG node, grouped by prefix
+    kg_equivalent_ids: dict[str, list[str]] = Field(default_factory=dict)
 
     @classmethod
     def from_input(cls, item: "pd.Series | dict[str, Any]", name_field: str = "name") -> "Entity":
