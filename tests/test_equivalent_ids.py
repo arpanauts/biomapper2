@@ -11,8 +11,8 @@ from biomapper2.models import Entity
 class TestEquivalentIds:
     """Tests for Linker.get_equivalent_ids() and pipeline integration."""
 
-    def test_returns_filtered_grouped_equivalent_ids(self):
-        """Happy path: returns IDs grouped by prefix, filtered to default prefixes, sorted."""
+    def test_returns_all_prefixes_grouped_and_sorted(self):
+        """Happy path: returns all IDs grouped by prefix, sorted alphabetically."""
         mock_response = {
             "CHEBI:15365": {
                 "id": "CHEBI:15365",
@@ -30,37 +30,37 @@ class TestEquivalentIds:
         with patch("biomapper2.core.linker.kestrel_request", return_value=mock_response):
             result = Linker.get_equivalent_ids(["CHEBI:15365"])
 
-        # Filtered: RXCUI and UMLS excluded by default prefixes
         assert "CHEBI:15365" in result
         grouped = result["CHEBI:15365"]
-        assert "HMDB" in grouped
         assert grouped["HMDB"] == ["HMDB0001879"]
         assert grouped["KEGG.COMPOUND"] == ["C01405"]
         assert grouped["PUBCHEM.COMPOUND"] == ["2244"]
         assert grouped["DRUGBANK"] == ["DB00945"]
-        assert "RXCUI" not in grouped
-        assert "UMLS" not in grouped
+        # All prefixes included — no filtering by default
+        assert "RXCUI" in grouped
+        assert "UMLS" in grouped
         # Keys sorted alphabetically
         assert list(grouped.keys()) == sorted(grouped.keys())
 
-    def test_unfiltered_with_empty_prefix_list(self):
-        """Passing prefixes=[] returns all equivalent IDs unfiltered."""
+    def test_explicit_prefix_filter(self):
+        """Passing prefixes filters to only those vocabularies."""
         mock_response = {
             "X:1": {
                 "id": "X:1",
-                "equivalent_ids": ["RXCUI:1191", "HMDB:H1", "UMLS:C1"],
+                "equivalent_ids": ["RXCUI:1191", "HMDB:H1", "UMLS:C1", "CHEBI:99"],
             },
         }
         with patch("biomapper2.core.linker.kestrel_request", return_value=mock_response):
-            result = Linker.get_equivalent_ids(["X:1"], prefixes=[])
+            result = Linker.get_equivalent_ids(["X:1"], prefixes=["HMDB", "CHEBI"])
 
         grouped = result["X:1"]
-        assert "RXCUI" in grouped
         assert "HMDB" in grouped
-        assert "UMLS" in grouped
+        assert "CHEBI" in grouped
+        assert "RXCUI" not in grouped
+        assert "UMLS" not in grouped
 
-    def test_empty_input_and_edge_cases(self):
-        """Edge cases: empty input, missing node, missing key."""
+    def test_edge_cases_and_error_handling(self):
+        """Edge cases (empty input, missing node/key) and Kestrel API failure."""
         with patch("biomapper2.core.linker.kestrel_request") as mock_req:
             assert Linker.get_equivalent_ids([]) == {}
             mock_req.assert_not_called()
@@ -71,8 +71,7 @@ class TestEquivalentIds:
         with patch("biomapper2.core.linker.kestrel_request", return_value={"X:1": {"id": "X:1"}}):
             assert Linker.get_equivalent_ids(["X:1"]) == {"X:1": {}}
 
-    def test_kestrel_api_error_degrades_gracefully(self):
-        """Error path: Kestrel failure logs warning and returns empty dict."""
+        # Kestrel failure degrades gracefully
         with patch("biomapper2.core.linker.kestrel_request", side_effect=Exception("API error")):
             assert Linker.get_equivalent_ids(["CHEBI:15365"]) == {}
 
@@ -83,6 +82,50 @@ class TestEquivalentIds:
         entity = Entity(name="test", kg_equivalent_ids={"HMDB": ["HMDB0001879"], "CHEBI": ["15365"]})
         assert entity.to_dict()["kg_equivalent_ids"] == {"HMDB": ["HMDB0001879"], "CHEBI": ["15365"]}
         assert entity.to_series()["kg_equivalent_ids"] == {"HMDB": ["HMDB0001879"], "CHEBI": ["15365"]}
+
+    def test_returns_entity_type_appropriate_prefixes(self):
+        """All prefixes from Kestrel are returned, covering metabolite, gene, and protein vocabularies."""
+        mock_response = {
+            "CHEBI:15365": {
+                "id": "CHEBI:15365",
+                "equivalent_ids": [
+                    "CHEBI:15365",
+                    "HMDB:HMDB0001879",
+                    "LM:FA01030152",
+                    "RXCUI:1191",
+                    "ATC:N02BA01",
+                    "DRUGBANK:DB00945",
+                ],
+            },
+            "NCBIGene:7157": {
+                "id": "NCBIGene:7157",
+                "equivalent_ids": [
+                    "NCBIGene:7157",
+                    "HGNC:11998",
+                    "ENSEMBL:ENSG00000141510",
+                    "UniProtKB:P04637",
+                    "OMIM:191170",
+                ],
+            },
+        }
+        with patch("biomapper2.core.linker.kestrel_request", return_value=mock_response):
+            result = Linker.get_equivalent_ids(["CHEBI:15365", "NCBIGene:7157"])
+
+        # Metabolite/drug: all vocab prefixes present including clinical (ATC, RXCUI)
+        metab = result["CHEBI:15365"]
+        assert "CHEBI" in metab
+        assert "HMDB" in metab
+        assert "LM" in metab
+        assert "RXCUI" in metab
+        assert "ATC" in metab
+
+        # Gene/protein: gene-specific prefixes present
+        gene = result["NCBIGene:7157"]
+        assert "NCBIGene" in gene
+        assert "HGNC" in gene
+        assert "ENSEMBL" in gene
+        assert "UniProtKB" in gene
+        assert "OMIM" in gene
 
     def test_map_entity_to_kg_with_match(self):
         """Integration: map_entity_to_kg calls get_equivalent_ids and returns grouped dict."""
@@ -110,7 +153,7 @@ class TestEquivalentIds:
             {"chosen_kg_id": "NCBIGene:84836", "chosen_kg_id_provided": None, "chosen_kg_id_assigned": None}
         )
         mapper.linker.get_equivalent_ids.return_value = {
-            "NCBIGene:84836": {"ENSEMBL": ["ENSG00000114779"], "HGNC": ["28235"]}
+            "NCBIGene:84836": {"ENSEMBL": ["ENSG00000114779"], "HGNC": ["28235"], "UniProtKB": ["Q96IU4"]}
         }
 
         result = Mapper.map_entity_to_kg(
@@ -122,7 +165,8 @@ class TestEquivalentIds:
         )
 
         mapper.linker.get_equivalent_ids.assert_called_once_with(["NCBIGene:84836"])
-        assert result["kg_equivalent_ids"] == {"ENSEMBL": ["ENSG00000114779"], "HGNC": ["28235"]}
+        expected = {"ENSEMBL": ["ENSG00000114779"], "HGNC": ["28235"], "UniProtKB": ["Q96IU4"]}
+        assert result["kg_equivalent_ids"] == expected
 
     def test_map_entity_no_match_returns_empty_dict(self):
         """Integration: entity with no KG match gets empty dict, no API call."""

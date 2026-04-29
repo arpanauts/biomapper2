@@ -101,27 +101,6 @@ class Linker:
             batch_size=KESTREL_BATCH_SIZE_CANONICALIZE,
         )
 
-    # Default prefixes for equivalent_ids filtering — biomedically useful identifiers
-    DEFAULT_EQUIVALENT_ID_PREFIXES: list[str] = [
-        "CHEBI",
-        "CHEMBL.COMPOUND",
-        "DRUGBANK",
-        "ENSEMBL",
-        "GTOPDB",
-        "HGNC",
-        "HMDB",
-        "INCHIKEY",
-        "KEGG.COMPOUND",
-        "KEGG.DRUG",
-        "LM",
-        "MESH",
-        "NCIT",
-        "PUBCHEM.COMPOUND",
-        "RM",
-        "UNII",
-        "UniProtKB",
-    ]
-
     @staticmethod
     def get_equivalent_ids(
         kg_node_ids: list[str],
@@ -130,16 +109,16 @@ class Linker:
         """
         Fetch equivalent IDs for KG nodes from the Kestrel /get-nodes endpoint.
 
-        Returns IDs grouped by CURIE prefix and filtered to biomedically useful
-        vocabularies by default. Pass prefixes=[] to get all equivalent IDs unfiltered.
+        Returns all IDs grouped by CURIE prefix. Pass a list of prefixes to
+        filter to specific vocabularies only.
 
         This is a non-critical enrichment step. On API failure, logs a warning
         and returns an empty dict rather than raising.
 
         Args:
             kg_node_ids: List of KG node CURIEs to look up
-            prefixes: CURIE prefixes to include (default: DEFAULT_EQUIVALENT_ID_PREFIXES).
-                      Pass empty list for no filtering.
+            prefixes: Optional CURIE prefixes to include. When None (default),
+                      all prefixes are returned.
 
         Returns:
             Dictionary mapping each node CURIE to a dict of {prefix: [local_ids]},
@@ -147,9 +126,6 @@ class Linker:
         """
         if not kg_node_ids:
             return {}
-
-        if prefixes is None:
-            prefixes = Linker.DEFAULT_EQUIVALENT_ID_PREFIXES
 
         try:
             raw_results = kestrel_request(
@@ -174,6 +150,10 @@ class Linker:
                 if ":" not in equiv_id:
                     continue
                 prefix, local_id = equiv_id.split(":", 1)
+                # By default all prefixes are returned — KG nodes naturally carry only
+                # entity-type-relevant vocabularies (e.g. genes get HGNC/ENSEMBL,
+                # metabolites get LM/HMDB). The prefixes param is an opt-in hook for
+                # callers that need to narrow further (e.g. an API query param).
                 if prefixes and prefix not in prefixes:
                     continue
                 grouped.setdefault(prefix, []).append(local_id)
