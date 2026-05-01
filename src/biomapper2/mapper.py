@@ -118,6 +118,11 @@ class Mapper:
         assert isinstance(resolved_result, pd.Series)
         entity = entity.update_from(resolved_result)
 
+        # Do Step 5: enrich with equivalent IDs from the chosen KG node
+        if entity.chosen_kg_id is not None:
+            equiv_ids = self.linker.get_equivalent_ids([entity.chosen_kg_id])
+            entity = entity.update_from(pd.Series({"kg_equivalent_ids": equiv_ids.get(entity.chosen_kg_id, {})}))
+
         if input_is_series:
             return entity.to_series()
         return entity.to_dict()
@@ -233,6 +238,15 @@ class Mapper:
         resolved_df = self.resolver.resolve(df)
         df = df.join(resolved_df)
         logging.info(f"After step 4 (resolution), df is: \n{df}")
+
+        # Do Step 5: enrich with equivalent IDs from chosen KG nodes
+        unique_kg_ids = [kid for kid in df["chosen_kg_id"].dropna().unique()]
+        if unique_kg_ids:
+            equiv_map = self.linker.get_equivalent_ids(unique_kg_ids)
+            df["kg_equivalent_ids"] = df["chosen_kg_id"].map(lambda kid: {} if pd.isna(kid) else equiv_map.get(kid, {}))
+        else:
+            df["kg_equivalent_ids"] = pd.Series([{} for _ in range(len(df))], index=df.index)
+        logging.info(f"After step 5 (equivalent IDs enrichment), df is: \n{df}")
 
         # Do a little validation of results dataframe
         num_rows_end = len(df)

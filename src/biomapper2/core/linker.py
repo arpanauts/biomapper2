@@ -101,6 +101,67 @@ class Linker:
             batch_size=KESTREL_BATCH_SIZE_CANONICALIZE,
         )
 
+    @staticmethod
+    def get_equivalent_ids(
+        kg_node_ids: list[str],
+        prefixes: list[str] | None = None,
+    ) -> dict[str, dict[str, list[str]]]:
+        """
+        Fetch equivalent IDs for KG nodes from the Kestrel /get-nodes endpoint.
+
+        Returns all IDs grouped by CURIE prefix. Pass a list of prefixes to
+        filter to specific vocabularies only.
+
+        This is a non-critical enrichment step. On API failure, logs a warning
+        and returns an empty dict rather than raising.
+
+        Args:
+            kg_node_ids: List of KG node CURIEs to look up
+            prefixes: Optional CURIE prefixes to include. When None (default),
+                      all prefixes are returned.
+
+        Returns:
+            Dictionary mapping each node CURIE to a dict of {prefix: [local_ids]},
+            e.g. {"CHEBI:15365": {"HMDB": ["HMDB0001879"], "KEGG.COMPOUND": ["C01405"]}}
+        """
+        if not kg_node_ids:
+            return {}
+
+        try:
+            raw_results = kestrel_request(
+                method="POST",
+                endpoint="get-nodes",
+                batch_field="curies",
+                batch_items=kg_node_ids,
+                batch_size=KESTREL_BATCH_SIZE_CANONICALIZE,
+                json={"slim": False, "truncate_long_fields": False},
+            )
+        except Exception:
+            logging.warning("Failed to fetch equivalent IDs from Kestrel /get-nodes; returning empty", exc_info=True)
+            return {}
+
+        result: dict[str, dict[str, list[str]]] = {}
+        for curie, node_obj in raw_results.items():
+            if not isinstance(node_obj, dict):
+                continue
+            raw_ids = node_obj.get("equivalent_ids", [])
+            grouped: dict[str, list[str]] = {}
+            for equiv_id in raw_ids:
+                if ":" not in equiv_id:
+                    continue
+                prefix, local_id = equiv_id.split(":", 1)
+                # By default all prefixes are returned — KG nodes naturally carry only
+                # entity-type-relevant vocabularies (e.g. genes get HGNC/ENSEMBL,
+                # metabolites get LM/HMDB). The prefixes param is an opt-in hook for
+                # callers that need to narrow further (e.g. an API query param).
+                if prefixes and prefix not in prefixes:
+                    continue
+                grouped.setdefault(prefix, []).append(local_id)
+            # Sort local IDs within each prefix for deterministic output
+            result[curie] = {prefix: sorted(ids) for prefix, ids in sorted(grouped.items())}
+
+        return result
+
     def _format_kg_id_fields(
         self, entity: pd.Series | dict[str, Any], curie_to_kg_id_map: dict[str, str]
     ) -> tuple[dict[str, list[str]], dict[str, list[str]], dict[str, dict[str, list[str]]]]:

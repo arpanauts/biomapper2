@@ -7,7 +7,7 @@ External API remains dict-based for data scientist friendliness.
 
 from typing import TYPE_CHECKING, Any
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 __all__ = ["AssignedIDsDict", "Entity"]
 
@@ -57,6 +57,9 @@ class Entity(BaseModel):
     chosen_kg_id: str | None = None
     chosen_kg_id_provided: str | None = None
     chosen_kg_id_assigned: str | None = None
+
+    # Enrichment step output — equivalent IDs for the chosen KG node, grouped by prefix
+    kg_equivalent_ids: dict[str, list[str]] = Field(default_factory=dict)
 
     @classmethod
     def from_input(cls, item: "pd.Series | dict[str, Any]", name_field: str = "name") -> "Entity":
