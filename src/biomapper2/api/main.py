@@ -36,6 +36,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error(f"Failed to initialize Mapper: {e}")
         app.state.mapper = None
         app.state.mapper_error = str(e)
+
+    # Derive entity type presets from Kestrel (never crashes startup)
+    try:
+        from .kestrel_discovery import derive_presets_with_fallback
+
+        app.state.entity_type_presets = derive_presets_with_fallback()
+        logger.info("Loaded %d entity type presets", len(app.state.entity_type_presets))
+    except Exception as e:
+        logger.error(f"Failed to load entity type presets: {e}")
+        app.state.entity_type_presets = None
+
     yield
     # Cleanup on shutdown (if needed)
     logger.info("Shutting down...")

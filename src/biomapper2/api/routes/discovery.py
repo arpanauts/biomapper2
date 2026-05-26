@@ -1,10 +1,21 @@
 """Discovery and health check endpoints."""
 
+import logging
+
 from fastapi import APIRouter, Depends, Request
 
 from ..auth import validate_api_key
 from ..constants import API_VERSION
-from ..models import AnnotatorInfo, AnnotatorsResponse, EntityTypesResponse, HealthResponse, VocabulariesResponse
+from ..kestrel_discovery import ALIASES, STATIC_FALLBACK
+from ..models import (
+    AnnotatorInfo,
+    AnnotatorsResponse,
+    EntityType,
+    HealthResponse,
+    VocabulariesResponse,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -34,37 +45,74 @@ async def health_check(request: Request) -> HealthResponse:
     )
 
 
-@router.get("/entity-types", response_model=EntityTypesResponse)
+@router.get("/entity-types", response_model=list[EntityType], response_model_by_alias=True)
 async def list_entity_types(
     request: Request,
     _api_key: str = Depends(validate_api_key),
-) -> EntityTypesResponse:
+) -> list[EntityType]:
     """
     List supported entity types.
 
-    Returns Biolink entity types and common aliases that biomapper2 supports.
+    Returns an array of EntityType objects with Biolink categories, human-friendly
+    aliases, and default vocabulary prefixes derived from Kestrel search data.
     """
-    # Common entity types and their Biolink mappings
-    aliases = {
-        "metabolite": "biolink:SmallMolecule",
-        "lipid": "biolink:SmallMolecule",
-        "protein": "biolink:Protein",
-        "gene": "biolink:Gene",
-        "disease": "biolink:Disease",
-        "phenotype": "biolink:PhenotypicFeature",
-        "pathway": "biolink:Pathway",
-        "drug": "biolink:Drug",
-        "clinicallab": "biolink:ClinicalFinding",
-        "lab": "biolink:ClinicalFinding",
-    }
+    # Read presets from app.state (populated during lifespan startup)
+    presets: dict[str, list[str]] = getattr(request.app.state, "entity_type_presets", None) or {}
 
-    # Entity types are based on Biolink categories
-    entity_types = sorted(set(aliases.values()))
+    # If presets not loaded, build a minimal set from ALIASES + STATIC_FALLBACK
+    if not presets:
+        logger.warning("entity_type_presets not in app.state; using ALIASES + STATIC_FALLBACK")
+        # Collect all categories referenced by aliases
+        all_categories = set(ALIASES.values())
+        for cat in STATIC_FALLBACK:
+            all_categories.add(cat)
+        presets = {cat: STATIC_FALLBACK.get(cat, []) for cat in all_categories}
 
-    return EntityTypesResponse(
-        entity_types=entity_types,
-        aliases=aliases,
-    )
+    # Build reverse alias lookup: category -> list of alias names
+    reverse_aliases: dict[str, list[str]] = {}
+    for alias_name, category in ALIASES.items():
+        reverse_aliases.setdefault(category, []).append(alias_name)
+
+    # Step 1: Create EntityType for each category in presets
+    seen_categories: set[str] = set()
+    result: list[EntityType] = []
+
+    for category, prefix_list in sorted(presets.items()):
+        seen_categories.add(category)
+        aliases_for_cat = sorted(reverse_aliases.get(category, []))
+        result.append(
+            EntityType(
+                type=category,
+                aliases=aliases_for_cat if aliases_for_cat else None,
+                default_prefixes=prefix_list if prefix_list else None,
+            )
+        )
+
+    # Step 2: Append biolink:NamedThing if not already present
+    if "biolink:NamedThing" not in seen_categories:
+        seen_categories.add("biolink:NamedThing")
+        result.append(
+            EntityType(
+                type="biolink:NamedThing",
+                aliases=["general", "untyped"],
+                default_prefixes=[],
+            )
+        )
+
+    # Step 3: Ensure any alias-target categories missing from presets are included
+    for category in set(ALIASES.values()):
+        if category not in seen_categories:
+            seen_categories.add(category)
+            aliases_for_cat = sorted(reverse_aliases.get(category, []))
+            result.append(
+                EntityType(
+                    type=category,
+                    aliases=aliases_for_cat if aliases_for_cat else None,
+                    default_prefixes=STATIC_FALLBACK.get(category, []) or None,
+                )
+            )
+
+    return result
 
 
 @router.get("/annotators", response_model=AnnotatorsResponse)
