@@ -99,9 +99,14 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Include routers
+# Include routers — primary prefixes
 app.include_router(discovery.router, prefix="/api/v1", tags=["Discovery"])
 app.include_router(mapping.router, prefix="/api/v1/map", tags=["Mapping"])
+
+# Proxy-compatible aliases — biomapper-ui api-server rewrites /api/discovery/* → /discovery/*
+# and /api/map/* → /map/* before forwarding to this backend.
+app.include_router(discovery.router, prefix="/discovery", tags=["Discovery"], include_in_schema=False)
+app.include_router(mapping.router, prefix="/map", tags=["Mapping"], include_in_schema=False)
 
 
 # Root redirect
