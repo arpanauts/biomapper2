@@ -17,17 +17,21 @@ from ..models import (
 
 logger = logging.getLogger(__name__)
 
+# Primary router — requires X-API-Key auth for direct API access (/api/v1/*)
 router = APIRouter()
 
+# Proxy router — no API key auth. The biomapper-ui api-server handles auth
+# via Clerk before forwarding to /discovery/*. These routes are mounted at
+# /discovery (not /api/v1) and excluded from the OpenAPI schema.
+proxy_router = APIRouter()
 
-@router.get("/health", response_model=HealthResponse)
-async def health_check(request: Request) -> HealthResponse:
-    """
-    Health check endpoint.
 
-    Returns service status, version, and whether the Mapper is initialized.
-    This endpoint does not require authentication.
-    """
+# ---------------------------------------------------------------------------
+# Shared handler implementations
+# ---------------------------------------------------------------------------
+
+
+def _health_check(request: Request) -> HealthResponse:
     mapper = getattr(request.app.state, "mapper", None)
     mapper_error = getattr(request.app.state, "mapper_error", None)
 
@@ -45,24 +49,13 @@ async def health_check(request: Request) -> HealthResponse:
     )
 
 
-@router.get("/entity-types", response_model=list[EntityType], response_model_by_alias=True)
-async def list_entity_types(
-    request: Request,
-    _api_key: str = Depends(validate_api_key),
-) -> list[EntityType]:
-    """
-    List supported entity types.
-
-    Returns an array of EntityType objects with Biolink categories, human-friendly
-    aliases, and default vocabulary prefixes derived from Kestrel search data.
-    """
+def _list_entity_types(request: Request) -> list[EntityType]:
     # Read presets from app.state (populated during lifespan startup)
     presets: dict[str, list[str]] = getattr(request.app.state, "entity_type_presets", None) or {}
 
     # If presets not loaded, build a minimal set from ALIASES + STATIC_FALLBACK
     if not presets:
         logger.warning("entity_type_presets not in app.state; using ALIASES + STATIC_FALLBACK")
-        # Collect all categories referenced by aliases
         all_categories = set(ALIASES.values())
         for cat in STATIC_FALLBACK:
             all_categories.add(cat)
@@ -115,20 +108,10 @@ async def list_entity_types(
     return result
 
 
-@router.get("/annotators", response_model=AnnotatorsResponse)
-async def list_annotators(
-    request: Request,
-    _api_key: str = Depends(validate_api_key),
-) -> AnnotatorsResponse:
-    """
-    List available annotators.
-
-    Returns annotators that can be used to fetch additional identifiers for entities.
-    """
+def _list_annotators(request: Request) -> AnnotatorsResponse:
     mapper = getattr(request.app.state, "mapper", None)
 
     if mapper is None:
-        # Return static list if mapper not available
         return AnnotatorsResponse(
             annotators=[
                 AnnotatorInfo(
@@ -152,7 +135,6 @@ async def list_annotators(
             ]
         )
 
-    # Get annotators from the annotation engine
     annotators = []
     for slug, annotator in mapper.annotation_engine.annotator_registry.items():
         annotators.append(
@@ -166,20 +148,10 @@ async def list_annotators(
     return AnnotatorsResponse(annotators=annotators)
 
 
-@router.get("/vocabularies", response_model=VocabulariesResponse)
-async def list_vocabularies(
-    request: Request,
-    _api_key: str = Depends(validate_api_key),
-) -> VocabulariesResponse:
-    """
-    List supported vocabularies.
-
-    Returns vocabulary prefixes that biomapper2 can normalize and link.
-    """
+def _list_vocabularies(request: Request) -> VocabulariesResponse:
     mapper = getattr(request.app.state, "mapper", None)
 
     if mapper is None:
-        # Return minimal info if mapper not available
         from ..models import VocabularyInfo
 
         common_vocabs = [
@@ -191,7 +163,6 @@ async def list_vocabularies(
         ]
         return VocabulariesResponse(vocabularies=common_vocabs, count=len(common_vocabs))
 
-    # Get vocabularies from the normalizer's vocab info
     from ...utils import ALIASES_PROP
     from ..models import VocabularyInfo
 
@@ -203,7 +174,6 @@ async def list_vocabularies(
         prefix = info.get("prefix", key.upper())
         iri = info.get("iri")
 
-        # Get aliases from validator map
         aliases = []
         if key in vocab_validator_map:
             aliases = vocab_validator_map[key].get(ALIASES_PROP, [])
@@ -220,3 +190,70 @@ async def list_vocabularies(
         vocabularies=sorted(vocabularies, key=lambda v: v.prefix),
         count=len(vocabularies),
     )
+
+
+# ---------------------------------------------------------------------------
+# Primary router endpoints (require X-API-Key)
+# ---------------------------------------------------------------------------
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health_check(request: Request) -> HealthResponse:
+    """Health check endpoint. Does not require authentication."""
+    return _health_check(request)
+
+
+@router.get("/entity-types", response_model=list[EntityType], response_model_by_alias=True)
+async def list_entity_types(
+    request: Request,
+    _api_key: str = Depends(validate_api_key),
+) -> list[EntityType]:
+    """List supported entity types with aliases and default vocabulary prefixes."""
+    return _list_entity_types(request)
+
+
+@router.get("/annotators", response_model=AnnotatorsResponse)
+async def list_annotators(
+    request: Request,
+    _api_key: str = Depends(validate_api_key),
+) -> AnnotatorsResponse:
+    """List available annotators."""
+    return _list_annotators(request)
+
+
+@router.get("/vocabularies", response_model=VocabulariesResponse)
+async def list_vocabularies(
+    request: Request,
+    _api_key: str = Depends(validate_api_key),
+) -> VocabulariesResponse:
+    """List supported vocabularies."""
+    return _list_vocabularies(request)
+
+
+# ---------------------------------------------------------------------------
+# Proxy router endpoints (no API key — auth handled by biomapper-ui Clerk)
+# ---------------------------------------------------------------------------
+
+
+@proxy_router.get("/health", response_model=HealthResponse)
+async def proxy_health_check(request: Request) -> HealthResponse:
+    """Health check (proxy path)."""
+    return _health_check(request)
+
+
+@proxy_router.get("/entity-types", response_model=list[EntityType], response_model_by_alias=True)
+async def proxy_list_entity_types(request: Request) -> list[EntityType]:
+    """List entity types (proxy path, no API key required)."""
+    return _list_entity_types(request)
+
+
+@proxy_router.get("/annotators", response_model=AnnotatorsResponse)
+async def proxy_list_annotators(request: Request) -> AnnotatorsResponse:
+    """List annotators (proxy path, no API key required)."""
+    return _list_annotators(request)
+
+
+@proxy_router.get("/vocabularies", response_model=VocabulariesResponse)
+async def proxy_list_vocabularies(request: Request) -> VocabulariesResponse:
+    """List vocabularies (proxy path, no API key required)."""
+    return _list_vocabularies(request)
