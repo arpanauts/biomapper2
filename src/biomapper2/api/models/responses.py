@@ -81,8 +81,18 @@ class AnnotatorsResponse(BaseModel):
     annotators: list[AnnotatorInfo]
 
 
+class EntityType(BaseModel):
+    """A single entity type with optional aliases and default vocabulary prefixes."""
+
+    type: str = Field(..., description="Biolink category string (e.g. 'biolink:SmallMolecule')")
+    aliases: list[str] | None = Field(default=None, description="Human-friendly alias names for this type")
+    default_prefixes: list[str] | None = Field(
+        default=None, serialization_alias="defaultPrefixes", description="Default vocabulary prefixes for this type"
+    )
+
+
 class EntityTypesResponse(BaseModel):
-    """Response listing supported entity types."""
+    """Response listing supported entity types (legacy shape)."""
 
     entity_types: list[str] = Field(..., description="Biolink entity types supported")
     aliases: dict[str, str] = Field(..., description="Common aliases mapped to Biolink types")

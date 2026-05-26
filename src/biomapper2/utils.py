@@ -111,7 +111,9 @@ def safe_divide(numerator, denominator) -> float | None:
     return result
 
 
-def bulk_kestrel_request(method: str, endpoint: str, session: requests.Session | None = None, **kwargs) -> Any:
+def bulk_kestrel_request(
+    method: str, endpoint: str, session: requests.Session | None = None, auth_required: bool = True, **kwargs
+) -> Any:
     """
     Make a single Kestrel API request with the full payload.
 
@@ -122,6 +124,9 @@ def bulk_kestrel_request(method: str, endpoint: str, session: requests.Session |
         method: HTTP method ('GET' or 'POST')
         endpoint: API endpoint path
         session: Optional requests session (defaults to cached session)
+        auth_required: Whether to include the API key header. When False, the
+            request is sent without authentication (e.g. for GET /categories).
+            Default is True to preserve existing behavior.
         **kwargs: Additional arguments to pass to requests (json, params, etc.)
 
     Returns:
@@ -144,10 +149,12 @@ def bulk_kestrel_request(method: str, endpoint: str, session: requests.Session |
             allowable_methods=["GET", "POST"],
         )
 
+    headers: dict[str, str] = {}
+    if auth_required:
+        headers["X-API-Key"] = get_kestrel_api_key()
+
     try:
-        response = session.request(
-            method, f"{KESTREL_API_URL}/{endpoint}", headers={"X-API-Key": get_kestrel_api_key()}, **kwargs
-        )
+        response = session.request(method, f"{KESTREL_API_URL}/{endpoint}", headers=headers, **kwargs)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.HTTPError as e:
