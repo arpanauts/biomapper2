@@ -15,6 +15,7 @@ from biomapper2.api.main import app
 
 
 @pytest.mark.integration
+@pytest.mark.external
 class TestKestrelDiscoveryIntegration:
     """Integration tests against live Kestrel API (4 tests)."""
 
@@ -27,7 +28,7 @@ class TestKestrelDiscoveryIntegration:
 
     def test_small_molecule_presets_non_empty(self):
         """SmallMolecule presets are non-empty with valid prefix strings."""
-        presets = derive_all_presets(ALIASES)
+        presets, _ = derive_all_presets(ALIASES)
         assert "biolink:SmallMolecule" in presets
         sm_prefixes = presets["biolink:SmallMolecule"]
         assert len(sm_prefixes) > 0
@@ -35,7 +36,7 @@ class TestKestrelDiscoveryIntegration:
 
     def test_protein_presets_non_empty(self):
         """Protein presets are non-empty with valid prefix strings."""
-        presets = derive_all_presets(ALIASES)
+        presets, _ = derive_all_presets(ALIASES)
         assert "biolink:Protein" in presets
         prot_prefixes = presets["biolink:Protein"]
         assert len(prot_prefixes) > 0

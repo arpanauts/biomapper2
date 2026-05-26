@@ -37,7 +37,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.mapper = None
         app.state.mapper_error = str(e)
 
-    # Derive entity type presets from Kestrel (never crashes startup)
+    # Derive entity type presets from Kestrel (never crashes startup).
+    # NOTE: This is a blocking sync call in an async lifespan, consistent with
+    # the Mapper() init above. Both could be offloaded to asyncio.to_thread()
+    # in a future refactor, but startup-only blocking is tolerable.
     try:
         from .kestrel_discovery import derive_presets_with_fallback
 

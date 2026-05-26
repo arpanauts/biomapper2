@@ -64,7 +64,7 @@ class TestKestrelDiscovery:
     @patch("biomapper2.api.kestrel_discovery.bulk_kestrel_request", side_effect=_mock_bulk_request)
     def test_derive_all_presets_happy_path(self, mock_req):
         """derive_all_presets returns correct mapping with frequency ranking."""
-        presets = derive_all_presets(ALIASES_FIXTURE)
+        presets, completed = derive_all_presets(ALIASES_FIXTURE)
 
         # SmallMolecule should have CHEBI first (highest freq), then HMDB
         assert "biolink:SmallMolecule" in presets
@@ -82,14 +82,14 @@ class TestKestrelDiscovery:
     @patch("biomapper2.api.kestrel_discovery.bulk_kestrel_request", side_effect=_mock_bulk_request)
     def test_threshold_filters_low_frequency_prefixes(self, mock_req):
         """Prefix at exactly 10% threshold is excluded (>10% required)."""
-        presets = derive_all_presets(ALIASES_FIXTURE)
+        presets, _ = derive_all_presets(ALIASES_FIXTURE)
         sm_prefixes = presets["biolink:SmallMolecule"]
         assert "RARE" not in sm_prefixes
 
     @patch("biomapper2.api.kestrel_discovery.bulk_kestrel_request", return_value=[])
     def test_empty_categories_list(self, mock_req):
         """Empty categories list returns empty presets dict."""
-        presets = derive_all_presets(ALIASES_FIXTURE)
+        presets, _ = derive_all_presets(ALIASES_FIXTURE)
         assert presets == {}
 
     @patch("biomapper2.api.kestrel_discovery.bulk_kestrel_request")
@@ -102,7 +102,7 @@ class TestKestrelDiscovery:
             return {"term": []}  # empty results
 
         mock_req.side_effect = side_effect
-        presets = derive_all_presets({"metabolite": "biolink:SmallMolecule"})
+        presets, _ = derive_all_presets({"metabolite": "biolink:SmallMolecule"})
         assert presets["biolink:SmallMolecule"] == []
 
     @patch(
@@ -132,7 +132,7 @@ class TestKestrelDiscovery:
             raise ValueError("KESTREL_API_KEY environment variable is not set")
 
         mock_req.side_effect = side_effect
-        presets = derive_all_presets({"metabolite": "biolink:SmallMolecule"})
+        presets, _ = derive_all_presets({"metabolite": "biolink:SmallMolecule"})
         assert "biolink:SmallMolecule" in presets
         assert presets["biolink:SmallMolecule"] == []
 

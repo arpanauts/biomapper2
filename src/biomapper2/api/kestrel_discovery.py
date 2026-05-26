@@ -11,6 +11,7 @@ import logging
 import os
 import re
 import tempfile
+import time
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from concurrent.futures import TimeoutError as FuturesTimeoutError
@@ -171,7 +172,7 @@ def _categories_to_sample(aliases: dict[str, str]) -> set[str]:
     return set(aliases.values())
 
 
-def derive_all_presets(aliases: dict[str, str] | None = None) -> dict[str, list[str]]:
+def derive_all_presets(aliases: dict[str, str] | None = None) -> tuple[dict[str, list[str]], bool]:
     """Fetch categories and derive prefix presets for aliased categories.
 
     Uses a thread pool with a 30-second total timeout. Categories not in
@@ -181,22 +182,23 @@ def derive_all_presets(aliases: dict[str, str] | None = None) -> dict[str, list[
         aliases: Alias mapping (defaults to ``ALIASES``).
 
     Returns:
-        Dict mapping category string to ranked prefix list.
+        Tuple of (presets dict, completed_fully flag). The flag is False if any
+        category timed out or failed during sampling — partial results should
+        not be persisted to disk.
 
     Raises:
         requests.exceptions.RequestException: If category fetching fails.
-        FuturesTimeoutError: If the total timeout is exceeded (partial results
-            may have been collected).
     """
     if aliases is None:
         aliases = ALIASES
 
     categories = fetch_categories()
     if not categories:
-        return {}
+        return {}, True
 
     sampled_categories = _categories_to_sample(aliases)
     presets: dict[str, list[str]] = {}
+    completed_fully = True
 
     def _sample_one(cat: str) -> tuple[str, list[str]]:
         terms = CATEGORY_SAMPLE_TERMS.get(cat)
@@ -212,7 +214,6 @@ def derive_all_presets(aliases: dict[str, str] | None = None) -> dict[str, list[
     with ThreadPoolExecutor(max_workers=min(len(to_sample), 4) if to_sample else 1) as pool:
         futures = {pool.submit(_sample_one, cat): cat for cat in to_sample}
         deadline_remaining = float(TOTAL_DERIVE_TIMEOUT)
-        import time
 
         for future in futures:
             start = time.monotonic()
@@ -223,6 +224,7 @@ def derive_all_presets(aliases: dict[str, str] | None = None) -> dict[str, list[
                 cat = futures[future]
                 logger.warning("Sampling timed out or failed for %s: %s", cat, exc)
                 presets[cat] = []
+                completed_fully = False
             elapsed = time.monotonic() - start
             deadline_remaining -= elapsed
 
@@ -231,7 +233,7 @@ def derive_all_presets(aliases: dict[str, str] | None = None) -> dict[str, list[
         if cat not in presets:
             presets[cat] = []
 
-    return presets
+    return presets, completed_fully
 
 
 # ---------------------------------------------------------------------------
@@ -350,10 +352,13 @@ def derive_presets_with_fallback(aliases: dict[str, str] | None = None) -> dict[
 
     # Tier 1: Live derivation
     try:
-        presets = derive_all_presets(aliases)
+        presets, completed_fully = derive_all_presets(aliases)
         if presets:
-            save_to_disk(presets)
-            logger.info("Successfully derived and cached %d category presets", len(presets))
+            if completed_fully:
+                save_to_disk(presets)
+                logger.info("Successfully derived and cached %d category presets", len(presets))
+            else:
+                logger.warning("Partial derivation (%d categories) — not persisting to disk", len(presets))
             return presets
     except Exception as exc:
         logger.warning("Live preset derivation failed: %s", exc)
