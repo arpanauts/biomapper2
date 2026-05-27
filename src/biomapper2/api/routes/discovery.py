@@ -76,15 +76,14 @@ async def list_entity_types(request: Request) -> list[EntityType]:
             )
         )
 
+    # Ensure aliased categories are present even if Kestrel omits them
+    for category in set(ALIASES.values()) - seen_categories:
+        aliases_for_cat = sorted(reverse_aliases.get(category, []))
+        result.append(EntityType(type=category, aliases=aliases_for_cat or None, default_prefixes=None))
+
     # Append biolink:NamedThing if not already present
     if "biolink:NamedThing" not in seen_categories:
-        result.append(
-            EntityType(
-                type="biolink:NamedThing",
-                aliases=["general", "untyped"],
-                default_prefixes=[],
-            )
-        )
+        result.append(EntityType(type="biolink:NamedThing", aliases=["general", "untyped"], default_prefixes=[]))
 
     return result
 
