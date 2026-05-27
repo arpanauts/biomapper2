@@ -81,11 +81,11 @@ class TestKestrelDiscovery:
         assert presets.get("biolink:Gene") == []
 
     @patch("biomapper2.api.kestrel_discovery.bulk_kestrel_request", side_effect=_mock_bulk_request)
-    def test_threshold_filters_low_frequency_prefixes(self, mock_req):
-        """Prefix at exactly 5% threshold is excluded (>5% required)."""
+    def test_prefixes_ranked_by_frequency(self, mock_req):
+        """Prefixes are returned in descending frequency order."""
         presets, _ = derive_all_presets(ALIASES_FIXTURE)
         sm_prefixes = presets["biolink:SmallMolecule"]
-        assert "RARE" not in sm_prefixes
+        assert sm_prefixes.index("CHEBI") < sm_prefixes.index("RARE")
 
     @patch("biomapper2.api.kestrel_discovery.bulk_kestrel_request", return_value=[])
     def test_empty_categories_list(self, mock_req):

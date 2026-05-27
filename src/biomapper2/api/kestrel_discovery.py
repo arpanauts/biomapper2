@@ -29,7 +29,6 @@ logger = logging.getLogger(__name__)
 
 PRESET_CACHE_PATH = CACHE_DIR / "entity_type_presets.json"
 SCHEMA_VERSION = 1
-FREQUENCY_THRESHOLD = 0.05  # 5% minimum frequency
 MAX_PREFIXES_PER_CATEGORY = 30
 PER_REQUEST_TIMEOUT = 10  # seconds
 TOTAL_DERIVE_TIMEOUT = 30  # seconds
@@ -149,10 +148,7 @@ def sample_prefixes_for_category(
     if total_nodes == 0:
         return []
 
-    # Apply frequency threshold and take top N
-    threshold_count = total_nodes * FREQUENCY_THRESHOLD
-    filtered = [(prefix, count) for prefix, count in prefix_counter.most_common() if count > threshold_count]
-    return [prefix for prefix, _ in filtered[:MAX_PREFIXES_PER_CATEGORY]]
+    return [prefix for prefix, _ in prefix_counter.most_common(MAX_PREFIXES_PER_CATEGORY)]
 
 
 def derive_all_presets(aliases: dict[str, str] | None = None) -> tuple[dict[str, list[str]], bool]:
