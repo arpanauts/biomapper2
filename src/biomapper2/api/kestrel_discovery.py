@@ -30,13 +30,9 @@ logger = logging.getLogger(__name__)
 PRESET_CACHE_PATH = CACHE_DIR / "entity_type_presets.json"
 SCHEMA_VERSION = 1
 FREQUENCY_THRESHOLD = 0.05  # 5% minimum frequency
-MAX_PREFIXES_PER_CATEGORY = 8
+MAX_PREFIXES_PER_CATEGORY = 30
 PER_REQUEST_TIMEOUT = 10  # seconds
 TOTAL_DERIVE_TIMEOUT = 30  # seconds
-
-# General-purpose cross-reference prefixes that appear across most categories
-# and drown out domain-specific vocabularies in frequency ranking.
-GENERAL_PREFIX_EXCLUDES: set[str] = {"UMLS", "NCIT", "CHV", "EFO", "MESH"}
 
 # Human-friendly aliases mapping user-facing names to Biolink categories
 ALIASES: dict[str, str] = {
@@ -147,7 +143,7 @@ def sample_prefixes_for_category(
                 prefixes = node.get("prefixes")
                 if isinstance(prefixes, list):
                     for p in prefixes:
-                        if isinstance(p, str) and p and p not in GENERAL_PREFIX_EXCLUDES:
+                        if isinstance(p, str) and p:
                             prefix_counter[p] += 1
 
     if total_nodes == 0:
