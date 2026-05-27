@@ -189,9 +189,8 @@ def derive_all_presets(aliases: dict[str, str] | None = None) -> tuple[dict[str,
     for cat in to_sample:
         if time.monotonic() > deadline:
             logger.warning("Deadline exceeded; skipping remaining categories")
-            presets[cat] = []
             completed_fully = False
-            continue
+            break
 
         try:
             terms = CATEGORY_SAMPLE_TERMS.get(cat)
