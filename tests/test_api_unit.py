@@ -294,7 +294,6 @@ class TestEntityTypesEndpoint:
         assert sm[0]["defaultPrefixes"] == ["CHEBI", "HMDB"]
 
 
-
 class TestEntityApiCompatibility:
     """Verify Entity.to_dict() output feeds correctly into API response construction."""
 

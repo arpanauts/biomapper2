@@ -101,9 +101,7 @@ app.include_router(discovery.health_router, prefix="/api/v1", tags=["Discovery"]
 app.include_router(discovery.health_router, prefix="/discovery", include_in_schema=False)
 
 # Primary routes — require X-API-Key
-app.include_router(
-    discovery.router, prefix="/api/v1", tags=["Discovery"], dependencies=[Depends(validate_api_key)]
-)
+app.include_router(discovery.router, prefix="/api/v1", tags=["Discovery"], dependencies=[Depends(validate_api_key)])
 app.include_router(mapping.router, prefix="/api/v1/map", tags=["Mapping"])
 
 # Proxy routes — no API key (biomapper-ui Clerk handles auth)
