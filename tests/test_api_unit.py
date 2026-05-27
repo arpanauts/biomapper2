@@ -256,15 +256,20 @@ class TestEntityTypesEndpoint:
         assert "general" in named_thing[0]["aliases"]
         assert "untyped" in named_thing[0]["aliases"]
 
-    def test_microbiome_taxonomy_aliases_in_organism_taxon(self, client: TestClient, _swap_presets: FastAPI):
-        """microbiome and taxonomy aliases appear in OrganismTaxon's aliases."""
-        _swap_presets.state.entity_type_presets = {"biolink:OrganismTaxon": ["NCBITaxon"]}
+    def test_aliases_reverse_lookup(self, client: TestClient, _swap_presets: FastAPI):
+        """Aliases are correctly reverse-mapped to their entity types."""
+        _swap_presets.state.entity_type_presets = {
+            "biolink:SmallMolecule": ["CHEBI"],
+            "biolink:OrganismTaxon": ["NCBITaxon"],
+        }
         response = client.get("/api/v1/entity-types")
         data = response.json()
-        taxon = [e for e in data if e["type"] == "biolink:OrganismTaxon"]
-        assert len(taxon) == 1
-        assert "microbiome" in taxon[0]["aliases"]
-        assert "taxonomy" in taxon[0]["aliases"]
+        sm = next(e for e in data if e["type"] == "biolink:SmallMolecule")
+        assert "metabolite" in sm["aliases"]
+        assert "lipid" in sm["aliases"]
+        taxon = next(e for e in data if e["type"] == "biolink:OrganismTaxon")
+        assert "microbiome" in taxon["aliases"]
+        assert "taxonomy" in taxon["aliases"]
 
     def test_graceful_degradation_without_presets(self, client: TestClient, _swap_presets: FastAPI):
         """When entity_type_presets is not loaded, still returns valid array."""
@@ -288,15 +293,6 @@ class TestEntityTypesEndpoint:
         assert "default_prefixes" not in sm[0]
         assert sm[0]["defaultPrefixes"] == ["CHEBI", "HMDB"]
 
-    def test_small_molecule_has_metabolite_alias(self, client: TestClient, _swap_presets: FastAPI):
-        """biolink:SmallMolecule has aliases including metabolite and lipid."""
-        _swap_presets.state.entity_type_presets = {"biolink:SmallMolecule": ["CHEBI"]}
-        response = client.get("/api/v1/entity-types")
-        data = response.json()
-        sm = [e for e in data if e["type"] == "biolink:SmallMolecule"]
-        assert len(sm) == 1
-        assert "metabolite" in sm[0]["aliases"]
-        assert "lipid" in sm[0]["aliases"]
 
 
 class TestEntityApiCompatibility:
