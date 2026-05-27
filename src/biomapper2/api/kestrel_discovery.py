@@ -29,10 +29,14 @@ logger = logging.getLogger(__name__)
 
 PRESET_CACHE_PATH = CACHE_DIR / "entity_type_presets.json"
 SCHEMA_VERSION = 1
-FREQUENCY_THRESHOLD = 0.10  # 10% minimum frequency
+FREQUENCY_THRESHOLD = 0.05  # 5% minimum frequency
 MAX_PREFIXES_PER_CATEGORY = 8
 PER_REQUEST_TIMEOUT = 10  # seconds
 TOTAL_DERIVE_TIMEOUT = 30  # seconds
+
+# General-purpose cross-reference prefixes that appear across most categories
+# and drown out domain-specific vocabularies in frequency ranking.
+GENERAL_PREFIX_EXCLUDES: set[str] = {"UMLS", "NCIT", "CHV", "EFO", "MESH"}
 
 # Human-friendly aliases mapping user-facing names to Biolink categories
 ALIASES: dict[str, str] = {
@@ -65,15 +69,15 @@ CATEGORY_SAMPLE_TERMS: dict[str, list[str]] = {
 
 # Static fallback presets — used when both live derivation and disk cache fail
 STATIC_FALLBACK: dict[str, list[str]] = {
-    "biolink:SmallMolecule": ["CHEBI", "HMDB", "PUBCHEM.COMPOUND", "CHEMBL.COMPOUND", "MESH", "KEGG.COMPOUND"],
-    "biolink:Protein": ["PR", "UniProtKB", "NCIT", "CHEMBL.TARGET", "MESH"],
-    "biolink:Pathway": ["PathWhiz", "SMPDB", "NCIT", "KEGG", "GO"],
-    "biolink:OrganismTaxon": ["UMLS", "MESH", "NCIT", "NCBITaxon", "LOINC"],
-    "biolink:Gene": [],
-    "biolink:Disease": [],
-    "biolink:PhenotypicFeature": [],
-    "biolink:Drug": [],
-    "biolink:ClinicalFinding": [],
+    "biolink:SmallMolecule": ["CHEBI", "HMDB", "PUBCHEM.COMPOUND", "CHEMBL.COMPOUND", "KEGG.COMPOUND", "INCHIKEY"],
+    "biolink:Protein": ["UniProtKB", "PR", "CHEMBL.TARGET", "DRUGBANK"],
+    "biolink:Gene": ["ENSEMBL", "NCBIGene", "UniProtKB", "HGNC"],
+    "biolink:Disease": ["SNOMEDCT", "MONDO", "DOID", "ICD10", "OMIM"],
+    "biolink:PhenotypicFeature": ["SNOMEDCT", "MONDO", "DOID", "HP"],
+    "biolink:Pathway": ["SMPDB", "PathWhiz", "REACT", "GO", "KEGG"],
+    "biolink:Drug": ["RXNORM", "CHEMBL.COMPOUND", "PUBCHEM.COMPOUND", "DRUGBANK"],
+    "biolink:ClinicalFinding": ["HP", "SNOMEDCT", "LOINC"],
+    "biolink:OrganismTaxon": ["NCBITaxon"],
 }
 
 
@@ -143,7 +147,7 @@ def sample_prefixes_for_category(
                 prefixes = node.get("prefixes")
                 if isinstance(prefixes, list):
                     for p in prefixes:
-                        if isinstance(p, str) and p:
+                        if isinstance(p, str) and p and p not in GENERAL_PREFIX_EXCLUDES:
                             prefix_counter[p] += 1
 
     if total_nodes == 0:

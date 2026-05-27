@@ -19,11 +19,12 @@ from biomapper2.api.kestrel_discovery import (
 
 MOCK_CATEGORIES = ["biolink:SmallMolecule", "biolink:Protein", "biolink:Gene"]
 
-# 10 nodes total: CHEBI appears in 8 (80%), HMDB in 7 (70%), RARE in 1 (10% -- at threshold, NOT >10%).
+# 20 nodes total: CHEBI in 16 (80%), HMDB in 14 (70%), RARE in 1 (5% -- at threshold, NOT >5%).
 MOCK_NODES_SMALL_MOL: list[dict] = (
-    [{"id": f"CHEBI:{i}", "score": 0.9, "prefixes": ["CHEBI", "HMDB"]} for i in range(6)]
-    + [{"id": f"CHEBI:{i}", "score": 0.8, "prefixes": ["CHEBI"]} for i in range(6, 8)]
-    + [{"id": "HMDB:100", "score": 0.7, "prefixes": ["HMDB"]}]
+    [{"id": f"CHEBI:{i}", "score": 0.9, "prefixes": ["CHEBI", "HMDB"]} for i in range(12)]
+    + [{"id": f"CHEBI:{i}", "score": 0.8, "prefixes": ["CHEBI"]} for i in range(12, 16)]
+    + [{"id": f"HMDB:{i}", "score": 0.7, "prefixes": ["HMDB"]} for i in range(100, 102)]
+    + [{"id": "COMMON:1", "score": 0.6, "prefixes": ["COMMON"]}]
     + [{"id": "RARE:1", "score": 0.5, "prefixes": ["RARE"]}]
 )
 
@@ -81,7 +82,7 @@ class TestKestrelDiscovery:
 
     @patch("biomapper2.api.kestrel_discovery.bulk_kestrel_request", side_effect=_mock_bulk_request)
     def test_threshold_filters_low_frequency_prefixes(self, mock_req):
-        """Prefix at exactly 10% threshold is excluded (>10% required)."""
+        """Prefix at exactly 5% threshold is excluded (>5% required)."""
         presets, _ = derive_all_presets(ALIASES_FIXTURE)
         sm_prefixes = presets["biolink:SmallMolecule"]
         assert "RARE" not in sm_prefixes
