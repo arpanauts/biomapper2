@@ -91,13 +91,6 @@ class EntityType(BaseModel):
     )
 
 
-class EntityTypesResponse(BaseModel):
-    """Response listing supported entity types (legacy shape)."""
-
-    entity_types: list[str] = Field(..., description="Biolink entity types supported")
-    aliases: dict[str, str] = Field(..., description="Common aliases mapped to Biolink types")
-
-
 class VocabularyInfo(BaseModel):
     """Information about a vocabulary."""
 
