@@ -9,12 +9,9 @@ sampling text-search results and ranking prefix frequency.
 import json
 import logging
 import os
-import re
 import tempfile
 import time
 from collections import Counter
-from concurrent.futures import ThreadPoolExecutor
-from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -86,16 +83,7 @@ STATIC_FALLBACK: dict[str, list[str]] = {
 
 
 def fetch_categories() -> list[str]:
-    """Fetch all Kestrel knowledge graph categories.
-
-    Calls GET /categories without authentication (the endpoint requires no API key).
-
-    Returns:
-        List of category strings (e.g. ``["biolink:SmallMolecule", ...]``).
-
-    Raises:
-        requests.exceptions.RequestException: If the request fails.
-    """
+    """Fetch all Kestrel knowledge graph categories."""
     result = bulk_kestrel_request("GET", "categories", auth_required=False, timeout=PER_REQUEST_TIMEOUT)
     if isinstance(result, list):
         return [str(c) for c in result]
@@ -167,27 +155,20 @@ def sample_prefixes_for_category(
     return [prefix for prefix, _ in filtered[:MAX_PREFIXES_PER_CATEGORY]]
 
 
-def _categories_to_sample(aliases: dict[str, str]) -> set[str]:
-    """Return the set of Biolink categories that have at least one alias."""
-    return set(aliases.values())
-
-
 def derive_all_presets(aliases: dict[str, str] | None = None) -> tuple[dict[str, list[str]], bool]:
     """Fetch categories and derive prefix presets for aliased categories.
 
-    Uses a thread pool with a 30-second total timeout. Categories not in
-    ``CATEGORY_SAMPLE_TERMS`` use the category display name as fallback.
+    Iterates sequentially over aliased categories (at most ~9), running
+    sample text searches for each. Categories not in ``CATEGORY_SAMPLE_TERMS``
+    use the category display name as a fallback search term.
 
     Args:
         aliases: Alias mapping (defaults to ``ALIASES``).
 
     Returns:
         Tuple of (presets dict, completed_fully flag). The flag is False if any
-        category timed out or failed during sampling — partial results should
-        not be persisted to disk.
-
-    Raises:
-        requests.exceptions.RequestException: If category fetching fails.
+        category failed during sampling — partial results should not be
+        persisted to disk.
     """
     if aliases is None:
         aliases = ALIASES
@@ -196,37 +177,31 @@ def derive_all_presets(aliases: dict[str, str] | None = None) -> tuple[dict[str,
     if not categories:
         return {}, True
 
-    sampled_categories = _categories_to_sample(aliases)
+    sampled_categories = set(aliases.values())
     presets: dict[str, list[str]] = {}
     completed_fully = True
-
-    def _sample_one(cat: str) -> tuple[str, list[str]]:
-        terms = CATEGORY_SAMPLE_TERMS.get(cat)
-        if terms is None:
-            # Fallback: use category display name (strip "biolink:" prefix)
-            display_name = cat.removeprefix("biolink:")
-            terms = [display_name]
-        return cat, sample_prefixes_for_category(cat, terms)
 
     # Only sample aliased categories; others get empty presets
     to_sample = [c for c in categories if c in sampled_categories]
 
-    with ThreadPoolExecutor(max_workers=min(len(to_sample), 4) if to_sample else 1) as pool:
-        futures = {pool.submit(_sample_one, cat): cat for cat in to_sample}
-        deadline_remaining = float(TOTAL_DERIVE_TIMEOUT)
+    deadline = time.monotonic() + TOTAL_DERIVE_TIMEOUT
 
-        for future in futures:
-            start = time.monotonic()
-            try:
-                cat, prefixes = future.result(timeout=max(deadline_remaining, 0.1))
-                presets[cat] = prefixes
-            except (FuturesTimeoutError, Exception) as exc:
-                cat = futures[future]
-                logger.warning("Sampling timed out or failed for %s: %s", cat, exc)
-                presets[cat] = []
-                completed_fully = False
-            elapsed = time.monotonic() - start
-            deadline_remaining -= elapsed
+    for cat in to_sample:
+        if time.monotonic() > deadline:
+            logger.warning("Deadline exceeded; skipping remaining categories")
+            completed_fully = False
+            break
+
+        try:
+            terms = CATEGORY_SAMPLE_TERMS.get(cat)
+            if terms is None:
+                display_name = cat.removeprefix("biolink:")
+                terms = [display_name]
+            presets[cat] = sample_prefixes_for_category(cat, terms)
+        except Exception as exc:
+            logger.warning("Sampling failed for %s: %s", cat, exc)
+            presets[cat] = []
+            completed_fully = False
 
     # Include non-sampled categories with empty presets
     for cat in categories:
@@ -242,14 +217,7 @@ def derive_all_presets(aliases: dict[str, str] | None = None) -> tuple[dict[str,
 
 
 def save_to_disk(presets: dict[str, list[str]], path: Path | None = None) -> None:
-    """Persist presets to disk via atomic write (write to .tmp, rename).
-
-    The JSON file includes ``schema_version`` and ``timestamp`` metadata.
-
-    Args:
-        presets: Category-to-prefixes mapping.
-        path: File path (defaults to ``PRESET_CACHE_PATH``).
-    """
+    """Persist presets to disk via atomic write (write to .tmp, rename)."""
     if path is None:
         path = PRESET_CACHE_PATH
 
@@ -278,22 +246,7 @@ def save_to_disk(presets: dict[str, list[str]], path: Path | None = None) -> Non
 
 
 def load_from_disk(path: Path | None = None) -> dict[str, list[str]] | None:
-    """Load presets from disk and validate structural integrity.
-
-    Returns ``None`` on any failure: missing file, parse error, schema mismatch,
-    or structural validation failure.
-
-    Validation rules:
-    - ``schema_version`` must equal ``SCHEMA_VERSION``
-    - Category keys must match ``biolink:*`` pattern
-    - Prefix values must be non-empty strings
-
-    Args:
-        path: File path (defaults to ``PRESET_CACHE_PATH``).
-
-    Returns:
-        Category-to-prefixes dict, or ``None`` on failure.
-    """
+    """Load presets from disk and validate structural integrity."""
     if path is None:
         path = PRESET_CACHE_PATH
 
@@ -314,19 +267,14 @@ def load_from_disk(path: Path | None = None) -> dict[str, list[str]] | None:
         logger.warning("Invalid presets structure in %s", path)
         return None
 
-    # Structural validation
-    biolink_pattern = re.compile(r"^biolink:\w+$")
+    # Basic type checks
     for key, value in presets.items():
-        if not isinstance(key, str) or not biolink_pattern.match(key):
+        if not isinstance(key, str):
             logger.warning("Invalid category key '%s' in %s", key, path)
             return None
         if not isinstance(value, list):
             logger.warning("Invalid prefix list for '%s' in %s", key, path)
             return None
-        for prefix in value:
-            if not isinstance(prefix, str) or not prefix:
-                logger.warning("Invalid prefix value in '%s' in %s", key, path)
-                return None
 
     return presets
 

@@ -1,4 +1,4 @@
-"""Unit tests for kestrel_discovery module (mocked Kestrel, max 8 tests)."""
+"""Unit tests for kestrel_discovery module (mocked Kestrel)."""
 
 from pathlib import Path
 from unittest.mock import patch
@@ -59,7 +59,7 @@ def _mock_bulk_request(method: str, endpoint: str, auth_required: bool = True, *
 
 
 class TestKestrelDiscovery:
-    """Tests for kestrel_discovery module (8 tests max)."""
+    """Tests for kestrel_discovery module."""
 
     @patch("biomapper2.api.kestrel_discovery.bulk_kestrel_request", side_effect=_mock_bulk_request)
     def test_derive_all_presets_happy_path(self, mock_req):
