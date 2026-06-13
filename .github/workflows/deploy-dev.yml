@@ -1,0 +1,93 @@
+name: Deploy Biomapper2 API (Dev)
+
+on:
+  push:
+    branches:
+      - dev
+    paths:
+      - 'src/biomapper2/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - 'deploy/**'
+      - '.github/workflows/deploy-dev.yml'
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to deploy (defaults to dev)'
+        required: false
+        default: 'dev'
+
+concurrency:
+  group: lightsail-deploy-biomapper2-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: development
+
+    steps:
+      - name: Deploy to Lightsail
+        uses: appleboy/ssh-action@029f5b4aeeeb58fdfe1410a5d17f967dacf36262 # v1.0.3
+        env:
+          INPUT_BRANCH: ${{ github.event.inputs.branch }}
+        with:
+          host: ${{ secrets.LIGHTSAIL_HOST }}
+          username: ubuntu
+          key: ${{ secrets.LIGHTSAIL_SSH_KEY }}
+          timeout: 300s
+          envs: INPUT_BRANCH
+          script: |
+            set -e
+
+            DEPLOY_DIR=/home/ubuntu/biomapper2-dev
+            BRANCH=${INPUT_BRANCH:-dev}
+            echo "Deploying branch: $BRANCH to dev"
+
+            cd $DEPLOY_DIR
+
+            # Validate branch exists on remote
+            if ! git ls-remote --exit-code origin "refs/heads/$BRANCH" > /dev/null 2>&1; then
+              echo "ERROR: Branch '$BRANCH' does not exist on origin"
+              exit 1
+            fi
+
+            # Capture current state for rollback reference
+            PREV_SHA=$(git rev-parse HEAD)
+            PREV_BRANCH=$(git branch --show-current || echo "detached")
+            echo "Previous commit: $PREV_SHA (branch: $PREV_BRANCH)"
+
+            git fetch origin "$BRANCH"
+            git reset --hard "origin/$BRANCH"
+            echo "Deployed commit: $(git rev-parse HEAD)"
+
+            # Install dependencies
+            ~/.local/bin/uv sync
+
+            # Update systemd service if changed
+            sudo cp deploy/biomapper2-dev-api.service /etc/systemd/system/
+            sudo systemctl daemon-reload
+
+            # Restart dev service
+            sudo systemctl restart biomapper2-dev-api
+
+            # Health check with retry (12 attempts, 5s apart = 60s max)
+            echo "Waiting for dev API to start..."
+            set +e
+            for i in $(seq 1 12); do
+              curl -sf http://localhost:8003/api/v1/health > /dev/null 2>&1 && break
+              echo "Waiting for dev API... ($i/12)"
+              sleep 5
+            done
+            set -e
+
+            curl -sf http://localhost:8003/api/v1/health || {
+              echo "FAILED: Dev API health check"
+              echo "--- Last 50 lines of service journal ---"
+              sudo journalctl -u biomapper2-dev-api --no-pager -n 50
+              echo "--- End of journal ---"
+              echo "ROLLBACK INFO: previous commit was $PREV_SHA (branch: $PREV_BRANCH)"
+              exit 1
+            }
+
+            echo "Dev deployment successful!"

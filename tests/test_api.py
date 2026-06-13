@@ -36,15 +36,25 @@ class TestDiscoveryEndpoints:
     """Tests for discovery endpoints."""
 
     def test_list_entity_types(self, client: TestClient):
-        """Entity types endpoint returns valid types and aliases."""
+        """Entity types endpoint returns array of EntityType objects."""
         response = client.get("/api/v1/entity-types")
         assert response.status_code == 200
 
         data = response.json()
-        assert "entity_types" in data
-        assert "aliases" in data
-        assert len(data["entity_types"]) > 0
-        assert "metabolite" in data["aliases"]
+        assert isinstance(data, list)
+        assert len(data) > 0
+
+        # Each element has 'type' (required); 'aliases' and 'defaultPrefixes' are optional
+        for item in data:
+            assert "type" in item
+            assert isinstance(item["type"], str)
+
+        # SmallMolecule should be present with metabolite alias
+        types = {e["type"] for e in data}
+        assert "biolink:SmallMolecule" in types
+
+        sm = [e for e in data if e["type"] == "biolink:SmallMolecule"][0]
+        assert "metabolite" in sm["aliases"]
 
     def test_list_annotators(self, client: TestClient):
         """Annotators endpoint returns list of available annotators."""

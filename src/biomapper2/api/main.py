@@ -5,12 +5,14 @@ import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from ..mapper import Mapper
+from .auth import validate_api_key
 from .constants import API_VERSION
+from .kestrel_discovery import derive_presets_with_fallback
 from .routes import discovery, mapping
 
 # Configure logging
@@ -36,6 +38,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         logger.error(f"Failed to initialize Mapper: {e}")
         app.state.mapper = None
         app.state.mapper_error = str(e)
+
+    # Derive entity type presets from Kestrel (never crashes startup).
+    try:
+        app.state.entity_type_presets = derive_presets_with_fallback()
+        logger.info("Loaded %d entity type presets", len(app.state.entity_type_presets))
+    except Exception as e:
+        logger.error(f"Failed to load entity type presets: {e}")
+        app.state.entity_type_presets = None
+
     yield
     # Cleanup on shutdown (if needed)
     logger.info("Shutting down...")
@@ -85,9 +96,17 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Include routers
-app.include_router(discovery.router, prefix="/api/v1", tags=["Discovery"])
+# Health check — no auth required, mounted at both /api/v1 and /discovery
+app.include_router(discovery.health_router, prefix="/api/v1", tags=["Discovery"])
+app.include_router(discovery.health_router, prefix="/discovery", include_in_schema=False)
+
+# Primary routes — require X-API-Key
+app.include_router(discovery.router, prefix="/api/v1", tags=["Discovery"], dependencies=[Depends(validate_api_key)])
 app.include_router(mapping.router, prefix="/api/v1/map", tags=["Mapping"])
+
+# Proxy routes — no API key (biomapper-ui Clerk handles auth)
+app.include_router(discovery.router, prefix="/discovery", include_in_schema=False)
+app.include_router(mapping.router, prefix="/map", include_in_schema=False)
 
 
 # Root redirect

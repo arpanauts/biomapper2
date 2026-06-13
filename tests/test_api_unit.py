@@ -48,6 +48,15 @@ def mock_mapper():
     return mapper
 
 
+@pytest.fixture
+def _swap_presets(client: TestClient):
+    """Fixture that saves/restores entity_type_presets on app.state."""
+    fa = _app(client)
+    original = getattr(fa.state, "entity_type_presets", None)
+    yield fa
+    fa.state.entity_type_presets = original
+
+
 class TestMapperUnavailable:
     """Tests for when Mapper fails to initialize."""
 
@@ -216,6 +225,73 @@ class TestMultiKeyAuth:
 
         response = client.get("/api/v1/entity-types", headers={"X-API-Key": "key-unknown"})
         assert response.status_code == 403
+
+
+class TestEntityTypesEndpoint:
+    """Tests for the restructured GET /entity-types endpoint."""
+
+    def test_response_is_array_of_objects(self, client: TestClient, _swap_presets: FastAPI):
+        """Response is a JSON array of EntityType objects."""
+        _swap_presets.state.entity_type_presets = {
+            "biolink:SmallMolecule": ["CHEBI", "HMDB"],
+            "biolink:Protein": ["PR", "UniProtKB"],
+        }
+        response = client.get("/api/v1/entity-types")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) > 0
+        for item in data:
+            assert "type" in item
+            assert isinstance(item["type"], str)
+
+    def test_named_thing_present_with_empty_prefixes(self, client: TestClient, _swap_presets: FastAPI):
+        """biolink:NamedThing appears with empty defaultPrefixes."""
+        _swap_presets.state.entity_type_presets = {"biolink:SmallMolecule": ["CHEBI"]}
+        response = client.get("/api/v1/entity-types")
+        data = response.json()
+        named_thing = [e for e in data if e["type"] == "biolink:NamedThing"]
+        assert len(named_thing) == 1
+        assert named_thing[0]["defaultPrefixes"] == []
+        assert "general" in named_thing[0]["aliases"]
+        assert "untyped" in named_thing[0]["aliases"]
+
+    def test_aliases_reverse_lookup(self, client: TestClient, _swap_presets: FastAPI):
+        """Aliases are correctly reverse-mapped to their entity types."""
+        _swap_presets.state.entity_type_presets = {
+            "biolink:SmallMolecule": ["CHEBI"],
+            "biolink:OrganismTaxon": ["NCBITaxon"],
+        }
+        response = client.get("/api/v1/entity-types")
+        data = response.json()
+        sm = next(e for e in data if e["type"] == "biolink:SmallMolecule")
+        assert "metabolite" in sm["aliases"]
+        assert "lipid" in sm["aliases"]
+        taxon = next(e for e in data if e["type"] == "biolink:OrganismTaxon")
+        assert "microbiome" in taxon["aliases"]
+        assert "taxonomy" in taxon["aliases"]
+
+    def test_graceful_degradation_without_presets(self, client: TestClient, _swap_presets: FastAPI):
+        """When entity_type_presets is not loaded, still returns valid array."""
+        _swap_presets.state.entity_type_presets = None
+        response = client.get("/api/v1/entity-types")
+        assert response.status_code == 200
+        data = response.json()
+        assert isinstance(data, list)
+        assert len(data) > 0
+        types = [e["type"] for e in data]
+        assert "biolink:SmallMolecule" in types
+
+    def test_camel_case_serialization(self, client: TestClient, _swap_presets: FastAPI):
+        """Response uses camelCase field names (defaultPrefixes, not default_prefixes)."""
+        _swap_presets.state.entity_type_presets = {"biolink:SmallMolecule": ["CHEBI", "HMDB"]}
+        response = client.get("/api/v1/entity-types")
+        data = response.json()
+        sm = [e for e in data if e["type"] == "biolink:SmallMolecule"]
+        assert len(sm) == 1
+        assert "defaultPrefixes" in sm[0]
+        assert "default_prefixes" not in sm[0]
+        assert sm[0]["defaultPrefixes"] == ["CHEBI", "HMDB"]
 
 
 class TestEntityApiCompatibility:

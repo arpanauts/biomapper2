@@ -1,22 +1,30 @@
 """Discovery and health check endpoints."""
 
-from fastapi import APIRouter, Depends, Request
+import logging
 
-from ..auth import validate_api_key
+from fastapi import APIRouter, Request
+
 from ..constants import API_VERSION
-from ..models import AnnotatorInfo, AnnotatorsResponse, EntityTypesResponse, HealthResponse, VocabulariesResponse
+from ..kestrel_discovery import ALIASES, STATIC_FALLBACK
+from ..models import (
+    AnnotatorInfo,
+    AnnotatorsResponse,
+    EntityType,
+    HealthResponse,
+    VocabulariesResponse,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+# Separate router for health check — never requires auth
+health_router = APIRouter()
 
-@router.get("/health", response_model=HealthResponse)
+
+@health_router.get("/health", response_model=HealthResponse)
 async def health_check(request: Request) -> HealthResponse:
-    """
-    Health check endpoint.
-
-    Returns service status, version, and whether the Mapper is initialized.
-    This endpoint does not require authentication.
-    """
+    """Health check endpoint. Does not require authentication."""
     mapper = getattr(request.app.state, "mapper", None)
     mapper_error = getattr(request.app.state, "mapper_error", None)
 
@@ -34,53 +42,58 @@ async def health_check(request: Request) -> HealthResponse:
     )
 
 
-@router.get("/entity-types", response_model=EntityTypesResponse)
-async def list_entity_types(
-    request: Request,
-    _api_key: str = Depends(validate_api_key),
-) -> EntityTypesResponse:
-    """
-    List supported entity types.
+@router.get("/entity-types", response_model=list[EntityType], response_model_by_alias=True)
+async def list_entity_types(request: Request) -> list[EntityType]:
+    """List supported entity types with aliases and default vocabulary prefixes."""
+    # Read presets from app.state (populated during lifespan startup)
+    presets: dict[str, list[str]] = getattr(request.app.state, "entity_type_presets", None) or {}
 
-    Returns Biolink entity types and common aliases that biomapper2 supports.
-    """
-    # Common entity types and their Biolink mappings
-    aliases = {
-        "metabolite": "biolink:SmallMolecule",
-        "lipid": "biolink:SmallMolecule",
-        "protein": "biolink:Protein",
-        "gene": "biolink:Gene",
-        "disease": "biolink:Disease",
-        "phenotype": "biolink:PhenotypicFeature",
-        "pathway": "biolink:Pathway",
-        "drug": "biolink:Drug",
-        "clinicallab": "biolink:ClinicalFinding",
-        "lab": "biolink:ClinicalFinding",
-    }
+    # If presets not loaded, build a minimal set from ALIASES + STATIC_FALLBACK
+    if not presets:
+        logger.warning("entity_type_presets not in app.state; using ALIASES + STATIC_FALLBACK")
+        all_categories = set(ALIASES.values())
+        for cat in STATIC_FALLBACK:
+            all_categories.add(cat)
+        presets = {cat: STATIC_FALLBACK.get(cat, []) for cat in all_categories}
 
-    # Entity types are based on Biolink categories
-    entity_types = sorted(set(aliases.values()))
+    # Build reverse alias lookup: category -> list of alias names
+    reverse_aliases: dict[str, list[str]] = {}
+    for alias_name, category in ALIASES.items():
+        reverse_aliases.setdefault(category, []).append(alias_name)
 
-    return EntityTypesResponse(
-        entity_types=entity_types,
-        aliases=aliases,
-    )
+    # Create EntityType for each category in presets
+    seen_categories: set[str] = set()
+    result: list[EntityType] = []
+
+    for category, prefix_list in sorted(presets.items()):
+        seen_categories.add(category)
+        aliases_for_cat = sorted(reverse_aliases.get(category, []))
+        result.append(
+            EntityType(
+                type=category,
+                aliases=aliases_for_cat if aliases_for_cat else None,
+                default_prefixes=prefix_list if prefix_list else None,
+            )
+        )
+
+    # Ensure aliased categories are present even if Kestrel omits them
+    for category in set(ALIASES.values()) - seen_categories:
+        aliases_for_cat = sorted(reverse_aliases.get(category, []))
+        result.append(EntityType(type=category, aliases=aliases_for_cat or None, default_prefixes=None))
+
+    # Append biolink:NamedThing if not already present
+    if "biolink:NamedThing" not in seen_categories:
+        result.append(EntityType(type="biolink:NamedThing", aliases=["general", "untyped"], default_prefixes=[]))
+
+    return result
 
 
 @router.get("/annotators", response_model=AnnotatorsResponse)
-async def list_annotators(
-    request: Request,
-    _api_key: str = Depends(validate_api_key),
-) -> AnnotatorsResponse:
-    """
-    List available annotators.
-
-    Returns annotators that can be used to fetch additional identifiers for entities.
-    """
+async def list_annotators(request: Request) -> AnnotatorsResponse:
+    """List available annotators."""
     mapper = getattr(request.app.state, "mapper", None)
 
     if mapper is None:
-        # Return static list if mapper not available
         return AnnotatorsResponse(
             annotators=[
                 AnnotatorInfo(
@@ -104,7 +117,6 @@ async def list_annotators(
             ]
         )
 
-    # Get annotators from the annotation engine
     annotators = []
     for slug, annotator in mapper.annotation_engine.annotator_registry.items():
         annotators.append(
@@ -119,19 +131,11 @@ async def list_annotators(
 
 
 @router.get("/vocabularies", response_model=VocabulariesResponse)
-async def list_vocabularies(
-    request: Request,
-    _api_key: str = Depends(validate_api_key),
-) -> VocabulariesResponse:
-    """
-    List supported vocabularies.
-
-    Returns vocabulary prefixes that biomapper2 can normalize and link.
-    """
+async def list_vocabularies(request: Request) -> VocabulariesResponse:
+    """List supported vocabularies."""
     mapper = getattr(request.app.state, "mapper", None)
 
     if mapper is None:
-        # Return minimal info if mapper not available
         from ..models import VocabularyInfo
 
         common_vocabs = [
@@ -143,7 +147,6 @@ async def list_vocabularies(
         ]
         return VocabulariesResponse(vocabularies=common_vocabs, count=len(common_vocabs))
 
-    # Get vocabularies from the normalizer's vocab info
     from ...utils import ALIASES_PROP
     from ..models import VocabularyInfo
 
@@ -155,7 +158,6 @@ async def list_vocabularies(
         prefix = info.get("prefix", key.upper())
         iri = info.get("iri")
 
-        # Get aliases from validator map
         aliases = []
         if key in vocab_validator_map:
             aliases = vocab_validator_map[key].get(ALIASES_PROP, [])
