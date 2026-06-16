@@ -97,7 +97,13 @@ class MetabolomicsWorkbenchAnnotator(BaseAnnotator):
 
         # Apply get_annotations to each row using the cache
         assigned_ids_col = entities.apply(
-            self.get_annotations, axis=1, cache=cache, name_field=name_field, category=category, prefixes=prefixes
+            self.get_annotations,
+            axis=1,
+            cache=cache,
+            name_field=name_field,
+            category=category,
+            prefixes=prefixes,
+            prefer_human=prefer_human,
         )
 
         return cast(pd.Series, assigned_ids_col)

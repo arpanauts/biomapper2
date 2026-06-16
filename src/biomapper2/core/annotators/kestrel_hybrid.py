@@ -107,7 +107,7 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
         if not prefer_human:
             return term_results[0]
 
-        human = [r for r in term_results if HUMAN_MARKER_PREFIXES & set(r.get("prefixes", []))]
+        human = [r for r in term_results if HUMAN_MARKER_PREFIXES & set(r.get("prefixes") or [])]
         if not human:
             return term_results[0]
 

@@ -64,7 +64,13 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
 
         # Annotate each entity using the results from the bulk request
         assigned_ids_col = entities.apply(
-            self.get_annotations, axis=1, cache=results, name_field=name_field, category=category, prefixes=prefixes
+            self.get_annotations,
+            axis=1,
+            cache=results,
+            name_field=name_field,
+            category=category,
+            prefixes=prefixes,
+            prefer_human=prefer_human,
         )
 
         return cast(pd.Series, assigned_ids_col)
