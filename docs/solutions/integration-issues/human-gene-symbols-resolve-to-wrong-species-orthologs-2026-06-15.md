@@ -137,10 +137,16 @@ separates species where `prefix_filter` structurally cannot. No additional API c
   match — a graceful, observable miss.
 - **Make the fallback fraction observable** (reported in the gold-set validation run) so consumers can
   detect recall gaps instead of silently trusting `confidence_tier="high"`.
-- **`pytest.mark.xfail(strict=False)` for unfixable upstream recall gaps**: `GH1`'s human node
-  `NCBIGene:2688` is absent from Kestrel hybrid-search even at `limit=50` (Gene and Protein categories) —
-  a Kestrel *recall* gap a re-rank cannot fix. The xfail documents the gap and auto-passes (xpass) when
-  Kestrel later indexes the node; pair it with an unconditional graceful-fallback assertion.
+- **`pytest.mark.xfail(strict=False)` for unfixable upstream data issues**: `GH1` cannot be resolved to
+  the human gene by any re-rank. Live investigation (2026-06-16) showed `NCBIGene:2688` *exists* in
+  Kestrel but is an **entity-conflation node**: its `name` is `"SOMATROPIN"` (the recombinant
+  growth-hormone *drug*), its `synonyms` are all pharmaceutical product names (`Norditropin`,
+  `Genotropin`, `Saizen`, …) with no `"GH1"`/`"growth hormone 1"` gene-symbol text, and its categories
+  span `[ChemicalEntity, SmallMolecule, Gene, Protein, Drug]`. So a `"GH1"` query cannot retrieve it in
+  *any* search mode (text/vector/hybrid all rank it `None` at limit 50) — the human GH1 *gene* identity
+  was absorbed into the somatropin drug node. This is a Kestrel **KG data-quality** issue (raise with the
+  Kestrel team), not a recall/ranking gap a client can fix. The xfail documents it and auto-passes when
+  the KG node is corrected; pair it with an unconditional graceful-fallback assertion.
 - **Test with mocked hybrid rows that include `prefixes`** (and `name`/`synonyms`) so `_select_result` /
   `_symbol_matches` are exercised offline. The live integration/gold-set test cannot run in a sandbox
   because building `Mapper()`/`BiolinkClient` hangs on bmt (Biolink Model Toolkit) init, which is
@@ -152,7 +158,10 @@ separates species where `prefix_filter` structurally cannot. No additional API c
 
 ## Verification
 
-Live against the deployed dev API (`dev-biomapper.expertintheloop.io`):
+Live against the deployed dev API (`dev-biomapper.expertintheloop.io`). The re-ranking is gated to
+`biolink:Gene`/`biolink:Protein` (and descendants) — **both verified**; metabolites are excluded by design.
+
+**Gene category:**
 
 | Query | `prefer_human` | Resolved → | HGNC |
 |-------|----------------|-----------|------|
@@ -161,6 +170,20 @@ Live against the deployed dev API (`dev-biomapper.expertintheloop.io`):
 | `TNFRSF1B` | `true` | `NCBIGene:7133` (correct paralog) | ✓ |
 | `LDLR` | `true` | `NCBIGene:3949` | ✓ |
 | `glucose` (metabolite) | `true` | `CHEBI:4167` (unchanged) | ✗ |
+
+**Protein category** (verified 2026-06-16 — note Kestrel returns `NCBIGene` gene nodes for these protein
+queries, and the HGNC re-ranking engages identically; `false` yields a different non-human node):
+
+| Query (`entity_type=protein`) | `prefer_human=true` | `prefer_human=false` |
+|---|---|---|
+| `TNFRSF1A` | `NCBIGene:7132` ✓ HGNC | `NCBIGene:397020` |
+| `LDLR` | `NCBIGene:3949` ✓ HGNC | `NCBIGene:281276` |
+| `TP53` | `NCBIGene:7157` ✓ HGNC | `NCBIGene:403869` |
+| `INS` | `NCBIGene:3630` ✓ HGNC | `NCBIGene:397415` |
+
+The mechanism is **HGNC-specific, not gene-specific**: it corrects any human gene/protein query whose
+human candidate carries the `HGNC` marker. (`TP53` carries HGNC here — a useful counter-point to the
+cautionary `/get-nodes` sample noted in the related `equivalent-ids` doc.)
 
 ## Related Issues
 
