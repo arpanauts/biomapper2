@@ -1,5 +1,5 @@
 import logging
-from typing import Any
+from typing import Any, cast
 
 import pandas as pd
 
@@ -18,6 +18,7 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
         name_field: str,
         category: str,
         prefixes: list[str] | None = None,
+        prefer_human: bool = True,  # accepted for interface parity; not applicable to vector search
         cache: dict | None = None,
     ) -> AssignedIDsDict:
         """Implements BaseAnnotator.get_annotations"""
@@ -51,6 +52,7 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
         name_field: str,
         category: str,
         prefixes: list[str] | None = None,
+        prefer_human: bool = True,  # accepted for interface parity; not applicable to vector search
     ) -> pd.Series:  # Series of AssignedIDsDicts
         """Implements BaseAnnotator.get_annotations_bulk"""
 
@@ -65,7 +67,7 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
             self.get_annotations, axis=1, cache=results, name_field=name_field, category=category, prefixes=prefixes
         )
 
-        return assigned_ids_col
+        return cast(pd.Series, assigned_ids_col)
 
     # ----------------------------------------- Helper methods ----------------------------------------------- #
 
