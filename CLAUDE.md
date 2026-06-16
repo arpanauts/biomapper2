@@ -167,3 +167,11 @@ When using Claude Code to prepare PRs:
 1. **Before posting PR comments**: Always present the draft comment to the user for review first
 2. **Before pushing**: Show the user the changes and get confirmation
 3. **Use /pr-prep**: Run the PR preparation checklist before finalizing
+
+---
+
+## Documented Solutions
+
+`docs/solutions/` — documented solutions to past problems (build errors, integration issues,
+best practices), organized by category with YAML frontmatter (`module`, `tags`, `problem_type`).
+Relevant when debugging or implementing in documented areas.
