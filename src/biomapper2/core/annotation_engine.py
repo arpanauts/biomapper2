@@ -6,6 +6,7 @@ Queries external APIs or uses other creative approaches to retrieve additional i
 
 import logging
 from copy import deepcopy
+from functools import cached_property
 from typing import Any
 
 import pandas as pd
@@ -135,12 +136,21 @@ class AnnotationEngine:
 
     # ------------------------------------- Helper methods --------------------------------------- #
 
-    def _is_human_applicable_category(self, category: str) -> bool:
-        """True if the category is a gene/protein (or Biolink descendant), where human-preference applies."""
-        gene_protein = self.biolink_client.get_descendants("biolink:Gene") | self.biolink_client.get_descendants(
+    @cached_property
+    def _human_applicable_categories(self) -> set[str]:
+        """Gene/Protein and their Biolink descendants — categories where human-preference applies.
+
+        Cached per instance: the Biolink hierarchy is static at runtime, so this avoids recomputing the
+        descendant union on every annotate() call (which happens once per entity on the single/stream paths).
+        Lazy (computed on first use) so constructing the engine doesn't force the lookup eagerly.
+        """
+        return self.biolink_client.get_descendants("biolink:Gene") | self.biolink_client.get_descendants(
             "biolink:Protein"
         )
-        return category in gene_protein
+
+    def _is_human_applicable_category(self, category: str) -> bool:
+        """True if the category is a gene/protein (or Biolink descendant), where human-preference applies."""
+        return category in self._human_applicable_categories
 
     def _select_annotators(self, category: str) -> list[str]:
         """Select appropriate annotators based on entity type (returns their slugs)."""

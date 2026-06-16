@@ -89,10 +89,27 @@ class TestHumanGeneGoldSet:
         assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
 
     def test_gh1_negative_control_falls_back_gracefully(self, gold_set_run):
-        """GH1's human node is unreachable in Kestrel -> pipeline must return a node, not crash."""
+        """GH1's human node is unreachable in Kestrel -> pipeline must return a node, not crash.
+
+        This asserts only graceful behavior (a node is chosen), which holds whether or not the Kestrel
+        recall gap is ever fixed -- so it is NOT brittle.
+        """
         row = next(r for r in gold_set_run["rows"] if r["name"] == "GH1")
         assert row["chosen_kg_id"] is not None  # graceful fallback (honest miss), no exception
-        assert not row["is_expected_human"]  # documents the known Kestrel-recall residual
+
+    @pytest.mark.xfail(
+        reason=(
+            "Known Kestrel recall gap: the human GH1 node (NCBIGene:2688) is absent from hybrid-search "
+            "even at limit=50 (verified 2026-06-15). xfail (strict=False) documents the gap without "
+            "blocking CI; it auto-passes (xpass) once Kestrel indexes the human GH1 node -- at which "
+            "point remove this marker."
+        ),
+        strict=False,
+    )
+    def test_gh1_should_resolve_to_human_when_kestrel_gap_closes(self, gold_set_run):
+        """Records the desired GH1 outcome; xfails today, xpasses when the recall gap is fixed."""
+        row = next(r for r in gold_set_run["rows"] if r["name"] == "GH1")
+        assert row["chosen_kg_id"] == NEGATIVE_CONTROL["GH1"]
 
     def test_fallback_fraction_reported(self, gold_set_run):
         """The run quantifies and persists the fallback fraction (R8 observability)."""
