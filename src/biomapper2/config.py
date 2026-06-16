@@ -43,3 +43,12 @@ def get_kestrel_api_key() -> str:
 KESTREL_BATCHING_ENABLED = True  # Set to False to disable batching (for performance testing)
 KESTREL_BATCH_SIZE_SEARCH = 1000  # For text-search, vector-search, hybrid-search
 KESTREL_BATCH_SIZE_CANONICALIZE = 2000  # For canonicalize endpoint
+
+# Human-preference re-ranking for gene/protein resolution (see docs/plans HGNC plan).
+# When prefer_human is active, hybrid-search retrieves this many candidates (instead of 1) so the
+# human node — which often ranks below the wrong-species ortholog — is actually returned. Live spike
+# (2026-06-15) found recoverable human nodes at rank ~#4; 20 gives ample margin.
+HYBRID_SEARCH_LIMIT = 20
+# Human-only CURIE prefixes. HGNC assigns IDs only to human genes, so its presence in a hybrid-search
+# row's `prefixes` marks the human node. Any prefix added here must itself be human-exclusive.
+HUMAN_MARKER_PREFIXES = {"HGNC"}

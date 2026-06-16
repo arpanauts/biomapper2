@@ -2,7 +2,7 @@
 
 import logging
 from datetime import timedelta
-from typing import Any
+from typing import Any, cast
 from urllib.parse import quote
 
 import pandas as pd
@@ -45,6 +45,7 @@ class MetabolomicsWorkbenchAnnotator(BaseAnnotator):
         name_field: str,
         category: str,
         prefixes: list[str] | None = None,
+        prefer_human: bool = True,  # accepted for interface parity; metabolites have no HGNC analogue
         cache: dict | None = None,
     ) -> AssignedIDsDict:
         """Implements BaseAnnotator.get_annotations"""
@@ -83,6 +84,7 @@ class MetabolomicsWorkbenchAnnotator(BaseAnnotator):
         name_field: str,
         category: str,
         prefixes: list[str] | None = None,
+        prefer_human: bool = True,  # accepted for interface parity; metabolites have no HGNC analogue
     ) -> pd.Series:
         """Implements BaseAnnotator.get_annotations_bulk"""
 
@@ -95,10 +97,16 @@ class MetabolomicsWorkbenchAnnotator(BaseAnnotator):
 
         # Apply get_annotations to each row using the cache
         assigned_ids_col = entities.apply(
-            self.get_annotations, axis=1, cache=cache, name_field=name_field, category=category, prefixes=prefixes
+            self.get_annotations,
+            axis=1,
+            cache=cache,
+            name_field=name_field,
+            category=category,
+            prefixes=prefixes,
+            prefer_human=prefer_human,
         )
 
-        return assigned_ids_col
+        return cast(pd.Series, assigned_ids_col)
 
     def _fetch_refmet_data(self, metabolite_name: str) -> dict[str, Any] | None:
         """Fetch RefMet data from the Metabolomics Workbench match API.

@@ -6,6 +6,7 @@ Queries external APIs or uses other creative approaches to retrieve additional i
 
 import logging
 from copy import deepcopy
+from functools import cached_property
 from typing import Any
 
 import pandas as pd
@@ -44,6 +45,7 @@ class AnnotationEngine:
         prefixes: list[str],
         mode: AnnotationMode = "missing",
         annotators: list[str] | None = None,
+        prefer_human: bool = True,
     ) -> pd.DataFrame | pd.Series:
         """
         Annotate entity with additional vocab IDs, obtained using various internal or external methods.
@@ -59,6 +61,9 @@ class AnnotationEngine:
                 - 'missing': Only annotate entities without provided_ids (default)
                 - 'none': Skip annotation entirely (returns empty)
             annotators: Optional list of annotators to use (by slug). If None, annotators are selected automatically.
+            prefer_human: When True, prefer the human (HGNC-bearing) candidate for gene/protein
+                categories. This engine gates applicability by category (see below) and passes the
+                resolved, effective flag to the annotators.
 
         Returns:
             AssignedIDsDict (in a named Series) for single entity, and in a single-column
@@ -68,7 +73,14 @@ class AnnotationEngine:
         if mode not in valid_modes:
             raise ValueError(f"Invalid mode '{mode}'. Must be one of: {valid_modes}")
 
-        logging.info(f"Beginning annotation step.. (mode={mode}, annotators={annotators})")
+        # Human-preference applies only to gene/protein categories (and their Biolink descendants).
+        # Resolve the effective flag here so annotators receive an already-gated boolean.
+        effective_prefer_human = prefer_human and self._is_human_applicable_category(category)
+
+        logging.info(
+            f"Beginning annotation step.. (mode={mode}, annotators={annotators}, "
+            f"prefer_human={prefer_human}, effective_prefer_human={effective_prefer_human})"
+        )
 
         # Skip annotation if user requested it
         if mode == "none":
@@ -99,16 +111,46 @@ class AnnotationEngine:
 
             if isinstance(item, pd.DataFrame):
                 return self._annotate_dataframe(
-                    item, name_field, provided_id_fields, mode, category, prefixes, annotators_to_use
+                    item,
+                    name_field,
+                    provided_id_fields,
+                    mode,
+                    category,
+                    prefixes,
+                    annotators_to_use,
+                    effective_prefer_human,
                 )
             else:
                 return self._annotate_single(
-                    item, name_field, provided_id_fields, mode, category, prefixes, annotators_to_use
+                    item,
+                    name_field,
+                    provided_id_fields,
+                    mode,
+                    category,
+                    prefixes,
+                    annotators_to_use,
+                    effective_prefer_human,
                 )
         else:
             return self._get_empty_assigned_ids(item)
 
     # ------------------------------------- Helper methods --------------------------------------- #
+
+    @cached_property
+    def _human_applicable_categories(self) -> set[str]:
+        """Gene/Protein and their Biolink descendants — categories where human-preference applies.
+
+        Cached per instance: the Biolink hierarchy is static at runtime, so this avoids recomputing the
+        descendant union on every annotate() call (which happens once per entity on the single/stream paths).
+        Lazy (computed on first use) so constructing the engine doesn't force the lookup eagerly.
+        """
+        return self.biolink_client.get_descendants("biolink:Gene") | self.biolink_client.get_descendants(
+            "biolink:Protein"
+        )
+
+    def _is_human_applicable_category(self, category: str) -> bool:
+        """True if the category is a gene/protein (or Biolink descendant), where human-preference applies."""
+        return category in self._human_applicable_categories
 
     def _select_annotators(self, category: str) -> list[str]:
         """Select appropriate annotators based on entity type (returns their slugs)."""
@@ -134,6 +176,7 @@ class AnnotationEngine:
         category: str,
         prefixes: list[str],
         annotators: list,
+        prefer_human: bool = True,
     ) -> pd.DataFrame:
         """Annotate an entire DataFrame. Returns a single-column DataFrame containing AssignedIDsDicts."""
         if mode == "missing":
@@ -157,7 +200,9 @@ class AnnotationEngine:
 
             for annotator in annotators:
                 prepared_df = annotator.prepare(items_to_annotate, provided_id_fields)
-                annotations_col = annotator.get_annotations_bulk(prepared_df, name_field, category, prefixes)
+                annotations_col = annotator.get_annotations_bulk(
+                    prepared_df, name_field, category, prefixes, prefer_human=prefer_human
+                )
                 annotated_rows = pd.Series(
                     [self._merge_nested_dicts(d1, d2) for d1, d2 in zip(annotated_rows, annotations_col)],
                     index=annotated_rows.index,
@@ -177,6 +222,7 @@ class AnnotationEngine:
         category: str,
         prefixes: list[str],
         annotators: list,
+        prefer_human: bool = True,
     ) -> pd.Series:
         """Annotate a single entity. Returns named series containing AssignedIDsDict."""
         # If user requested it, skip entities that have any provided IDs
@@ -190,7 +236,9 @@ class AnnotationEngine:
         assigned_ids = dict()  # All annotations will be merged into this
         for annotator in annotators:
             prepared_entity = annotator.prepare(item, provided_id_fields)
-            entity_annotations = annotator.get_annotations(prepared_entity, name_field, category, prefixes)
+            entity_annotations = annotator.get_annotations(
+                prepared_entity, name_field, category, prefixes, prefer_human=prefer_human
+            )
             assigned_ids: AssignedIDsDict = self._merge_nested_dicts(assigned_ids, entity_annotations)
 
         return pd.Series({"assigned_ids": assigned_ids})  # Named Series
