@@ -24,6 +24,18 @@ class MappingOptions(BaseModel):
         default=None,
         description="Allowed vocabulary name(s) to map to (e.g., 'refmet', 'chebi')",
     )
+    prefer_human: bool = Field(
+        default=True,
+        description=(
+            "For gene/protein entities, prefer the human (HGNC-bearing) candidate that matches the "
+            "queried symbol over a wrong-species ortholog. Default True. Set False to restore legacy "
+            "top-scored selection. No effect on metabolites or other non-gene/protein categories."
+        ),
+    )
+
+    # Ignore unknown fields so a newer client sending extra options to an older server does not 422.
+    # (Pydantic v2 already defaults to ignore; set explicitly as documentation of the contract.)
+    model_config = {"extra": "ignore"}
 
 
 class EntityMappingRequest(BaseModel):
