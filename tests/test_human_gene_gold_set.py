@@ -89,25 +89,29 @@ class TestHumanGeneGoldSet:
         assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
 
     def test_gh1_negative_control_falls_back_gracefully(self, gold_set_run):
-        """GH1's human node is unreachable in Kestrel -> pipeline must return a node, not crash.
+        """GH1's human gene node is unreachable by symbol in Kestrel -> pipeline must return a node, not crash.
 
-        This asserts only graceful behavior (a node is chosen), which holds whether or not the Kestrel
-        recall gap is ever fixed -- so it is NOT brittle.
+        This asserts only graceful behavior (a node is chosen), which holds whether or not the upstream
+        Kestrel/Translator data issue is ever fixed -- so it is NOT brittle.
         """
         row = next(r for r in gold_set_run["rows"] if r["name"] == "GH1")
         assert row["chosen_kg_id"] is not None  # graceful fallback (honest miss), no exception
 
     @pytest.mark.xfail(
         reason=(
-            "Known Kestrel recall gap: the human GH1 node (NCBIGene:2688) is absent from hybrid-search "
-            "even at limit=50 (verified 2026-06-15). xfail (strict=False) documents the gap without "
-            "blocking CI; it auto-passes (xpass) once Kestrel indexes the human GH1 node -- at which "
-            "point remove this marker."
+            "Upstream Translator/Kestrel entity-conflation, NOT a biomapper2 bug or a simple recall gap: "
+            "NCBIGene:2688 exists but is an over-merged clique whose preferred name is 'SOMATROPIN' "
+            "(recombinant hGH drug) with only pharmaceutical synonyms and no 'GH1' gene-symbol text, so "
+            "no search mode (text/vector/hybrid) retrieves it by 'GH1' even at limit=50 (verified live "
+            "2026-06-16). This is the documented Babel/NodeNormalization GeneProtein + DrugChemical "
+            "conflation collapsing GH1 gene -> growth-hormone protein -> somatropin drug into one node. "
+            "xfail (strict=False) documents it without blocking CI; auto-passes (xpass) if the KG node is "
+            "corrected upstream -- a Kestrel/Translator data fix, not a biomapper2 one."
         ),
         strict=False,
     )
-    def test_gh1_should_resolve_to_human_when_kestrel_gap_closes(self, gold_set_run):
-        """Records the desired GH1 outcome; xfails today, xpasses when the recall gap is fixed."""
+    def test_gh1_should_resolve_to_human_when_upstream_conflation_fixed(self, gold_set_run):
+        """Records the desired GH1 outcome; xfails today, xpasses if the upstream conflation is corrected."""
         row = next(r for r in gold_set_run["rows"] if r["name"] == "GH1")
         assert row["chosen_kg_id"] == NEGATIVE_CONTROL["GH1"]
 
