@@ -76,6 +76,18 @@ class TestFallbackWiring:
         resolver.resolve.assert_not_called()
         assert "403795" in annotations.get("NCBIGene", {})
 
+    def test_fallback_disabled_unreachable_node_degrades_gracefully(self, monkeypatch):
+        """Kill switch off + an unreachable curated node (no candidates) -> honest empty, no crash.
+
+        Guards the degradation path the kill switch promises: disabling the bridge must not raise, it
+        just yields no annotation for the otherwise-unreachable gene (replaces the deleted integration
+        negative-control test with a network-free unit equivalent).
+        """
+        monkeypatch.setattr("biomapper2.core.annotators.kestrel_hybrid.GENE_SYMBOL_FALLBACK_ENABLED", False)
+        annotations, resolver = _annotate([], "GH1")
+        resolver.resolve.assert_not_called()
+        assert annotations == {}
+
     def test_empty_results_uses_resolver(self):
         """No candidates at all -> resolver attempted; if it resolves, that node is used."""
         annotations, resolver = _annotate([], "GH1")

@@ -34,9 +34,29 @@ POSITIVE_GOLD = {
 }
 
 
+# Slug of the annotator that owns the symbol-fallback bridge (see core/annotators/kestrel_hybrid.py).
+HYBRID_SLUG = "kestrel-hybrid-search"
+
+
 def _has_hgnc(result: dict) -> bool:
     """True if the resolved node carries an HGNC marker in its equivalent ids."""
     return "HGNC" in json.dumps(result.get("kg_equivalent_ids", {}))
+
+
+def _resolved_via(result: dict) -> str | None:
+    """Provenance marker for an assigned id, read from the preserved per-annotator ``assigned_ids``.
+
+    The symbol-fallback bridge tags its assigned id with ``resolved_via='symbol_fallback'``. That
+    marker is retained on the entity's ``assigned_ids`` (and surfaced in the API response) even though
+    the normalized curie/resolution layers do not carry it — so the gold-set can measure *actual*
+    bridge usage rather than inferring it from a chosen-id mismatch.
+    """
+    assigned = result.get("assigned_ids", {}) or {}
+    for vocab_map in (assigned.get(HYBRID_SLUG, {}) or {}).values():
+        for meta in (vocab_map or {}).values():
+            if isinstance(meta, dict) and meta.get("resolved_via"):
+                return str(meta["resolved_via"])
+    return None
 
 
 def _map_gene(shared_mapper, name: str) -> dict:
@@ -62,19 +82,23 @@ def gold_set_run(shared_mapper):
                 "chosen_kg_id": chosen,
                 "is_expected_human": chosen == expected,
                 "has_hgnc": _has_hgnc(result),
+                "resolved_via": _resolved_via(result),
                 "is_positive": name in POSITIVE_GOLD,
             }
         )
 
     positives = [r for r in rows if r["is_positive"]]
-    fell_back = [r for r in rows if not r["is_expected_human"]]
+    # Fraction of entities resolved through the curated symbol-fallback bridge (read from the
+    # preserved provenance marker, not inferred from a chosen-id mismatch) — the real R8 signal.
+    via_bridge = [r for r in rows if r["resolved_via"] == "symbol_fallback"]
     report = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "prefer_human": True,
         "n_total": len(rows),
         "n_positive": len(positives),
         "n_positive_resolved": sum(r["is_expected_human"] for r in positives),
-        "fallback_fraction": round(len(fell_back) / len(rows), 3),
+        "n_resolved_via_bridge": len(via_bridge),
+        "fallback_fraction": round(len(via_bridge) / len(rows), 3),
         "rows": rows,
     }
 
@@ -98,14 +122,22 @@ class TestHumanGeneGoldSet:
         assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
 
     def test_drug_conflated_resolves_via_fallback(self, gold_set_run):
-        """The drug-conflated genes (unreachable by any Kestrel search) resolve via the curated bridge."""
+        """The drug-conflated genes (unreachable by any Kestrel search) resolve via the curated bridge.
+
+        Asserts both the outcome (correct human node) AND the mechanism (the provenance marker proves
+        the bridge fired) — so a future regression where search starts surfacing these by coincidence
+        cannot pass this test silently.
+        """
         for name in ("GH1", "CALCA", "POMC", "CRH", "CTLA4", "GBA1"):
             row = next(r for r in gold_set_run["rows"] if r["name"] == name)
             assert row["chosen_kg_id"] == POSITIVE_GOLD[name], f"{name} -> {row['chosen_kg_id']} (expected human)"
             assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
+            assert row["resolved_via"] == "symbol_fallback", f"{name} did not resolve via the curated bridge"
 
     def test_fallback_fraction_reported(self, gold_set_run):
-        """The run quantifies and persists the fallback fraction (R8 observability)."""
+        """The run quantifies and persists how often the bridge fired (R8 observability)."""
         assert 0.0 <= gold_set_run["fallback_fraction"] <= 1.0
         # With the curated fallback bridge in place, every gold gene should resolve to its human node.
         assert gold_set_run["n_positive_resolved"] == gold_set_run["n_positive"]
+        # The fraction is read from real provenance: exactly the six drug-conflated genes use the bridge.
+        assert gold_set_run["n_resolved_via_bridge"] == 6

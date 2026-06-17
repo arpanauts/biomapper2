@@ -12,8 +12,13 @@ a no-op for every other symbol. This is a temporary measure; the durable fix is 
 exact-symbol retrieval / de-conflation). See docs/plans/2026-06-17-001-feat-gene-symbol-fallback-resolver-plan.md.
 """
 
-from ..config import KESTREL_BATCH_SIZE_CANONICALIZE
+from ..config import HUMAN_MARKER_PREFIXES, KESTREL_BATCH_SIZE_CANONICALIZE
 from ..utils import kestrel_request
+
+# Case-folded human-marker prefixes, matched against the prefix of each equivalent id. Reuses the
+# single source of truth in config (the same set _select_result uses) so the two human-gate paths
+# cannot drift, and is case-insensitive to tolerate lower-cased CURIE prefixes from the KG.
+_HUMAN_MARKER_PREFIXES_CF = {p.casefold() for p in HUMAN_MARKER_PREFIXES}
 
 # Verified 2026-06-16: each of these human gene nodes carries its gene symbol as a synonym and an
 # HGNC equivalent, yet is unreachable by symbol across hybrid/text/vector search (drug-conflation).
@@ -67,7 +72,13 @@ class GeneSymbolResolver:
         synonyms = {str(s).strip().casefold() for s in (node.get("synonyms") or [])}
         if key not in synonyms:
             return None
-        if not any(str(e).startswith("HGNC:") for e in (node.get("equivalent_ids") or [])):
+        # Match on the CURIE prefix, case-insensitively, against the shared human-marker set — a
+        # case-sensitive `startswith("HGNC:")` would silently reject a node whose equivalent ids
+        # arrive lower-cased (e.g. "hgnc:4261"), dropping a genuinely human curated gene.
+        if not any(
+            str(e).split(":", 1)[0].strip().casefold() in _HUMAN_MARKER_PREFIXES_CF
+            for e in (node.get("equivalent_ids") or [])
+        ):
             return None
 
         return curie
