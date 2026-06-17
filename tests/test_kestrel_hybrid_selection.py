@@ -27,7 +27,7 @@ TNFRSF1A_ROWS = [
 class TestSelectResult:
     def test_human_below_top_is_selected(self):
         """Happy path: HGNC-bearing human row (#4, lower score) chosen over top-scored ortholog."""
-        chosen = select(TNFRSF1A_ROWS, "TNFRSF1A", prefer_human=True)
+        chosen, _ = select(TNFRSF1A_ROWS, "TNFRSF1A", prefer_human=True)
         assert chosen is not None
         assert chosen["id"] == "NCBIGene:7132"
 
@@ -37,7 +37,7 @@ class TestSelectResult:
             _row("NCBIGene:7132", 4.9, "TNFRSF1A", ["NCBIGene", "HGNC", "ENSEMBL"]),
             _row("NCBIGene:397020", 4.8, "TNFRSF1A", ["NCBIGene", "RGD"]),
         ]
-        chosen = select(rows, "TNFRSF1A", prefer_human=True)
+        chosen, _ = select(rows, "TNFRSF1A", prefer_human=True)
         assert chosen is not None
         assert chosen["id"] == "NCBIGene:7132"
 
@@ -47,7 +47,7 @@ class TestSelectResult:
             _row("NCBIGene:7133", 4.5, "TNFRSF1B", ["NCBIGene", "HGNC"]),  # paralog, higher score
             _row("NCBIGene:7132", 2.4, "TNFRSF1A", ["NCBIGene", "HGNC"]),  # queried gene
         ]
-        chosen = select(rows, "TNFRSF1A", prefer_human=True)
+        chosen, _ = select(rows, "TNFRSF1A", prefer_human=True)
         assert chosen is not None
         assert chosen["id"] == "NCBIGene:7132"
 
@@ -57,7 +57,7 @@ class TestSelectResult:
             _row("NCBIGene:397020", 4.8, "TNFRSF1A", ["NCBIGene", "RGD"]),
             _row("NCBIGene:406471", 3.3, "tnfrsf1a", ["NCBIGene", "ZFIN"]),
         ]
-        chosen = select(rows, "TNFRSF1A", prefer_human=True)
+        chosen, _ = select(rows, "TNFRSF1A", prefer_human=True)
         assert chosen is not None
         assert chosen["id"] == "NCBIGene:397020"
 
@@ -67,23 +67,23 @@ class TestSelectResult:
             _row("NCBIGene:397020", 4.8, "TNFRSF1A", ["NCBIGene", "RGD"]),  # ortholog, top score
             _row("NCBIGene:7132", 2.4, "TNFRSF1A", ["NCBIGene", "HGNC"], synonyms=["TNFR1", "CD120a"]),
         ]
-        chosen = select(rows, "CD120a", prefer_human=True)
+        chosen, _ = select(rows, "CD120a", prefer_human=True)
         assert chosen is not None
         assert chosen["id"] == "NCBIGene:7132"
 
     def test_prefer_human_false_returns_top_score(self):
         """Edge: prefer_human disabled -> legacy top-1 behavior regardless of HGNC."""
-        chosen = select(TNFRSF1A_ROWS, "TNFRSF1A", prefer_human=False)
+        chosen, _ = select(TNFRSF1A_ROWS, "TNFRSF1A", prefer_human=False)
         assert chosen is not None
         assert chosen["id"] == "NCBIGene:397020"
 
     def test_empty_candidate_list_returns_none(self):
         """Edge: empty list -> None, no exception."""
-        assert select([], "TNFRSF1A", prefer_human=True) is None
+        assert select([], "TNFRSF1A", prefer_human=True)[0] is None
 
     def test_missing_keys_do_not_raise(self):
         """Edge: rows missing `prefixes`/`score` keys are tolerated (treated as non-human, fallback)."""
         rows = [{"id": "NCBIGene:1", "name": "X"}, {"id": "NCBIGene:2", "name": "X", "score": 1.0}]
-        chosen = select(rows, "X", prefer_human=True)
+        chosen, _ = select(rows, "X", prefer_human=True)
         assert chosen is not None
         assert chosen["id"] == "NCBIGene:1"  # first row, honest fallback (no HGNC anywhere)

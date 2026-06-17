@@ -3,14 +3,29 @@ from typing import Any, cast
 
 import pandas as pd
 
-from ...config import HUMAN_MARKER_PREFIXES, HYBRID_SEARCH_LIMIT, KESTREL_BATCH_SIZE_SEARCH
+from ...config import (
+    GENE_SYMBOL_FALLBACK_ENABLED,
+    HUMAN_MARKER_PREFIXES,
+    HYBRID_SEARCH_LIMIT,
+    KESTREL_BATCH_SIZE_SEARCH,
+)
 from ...utils import AssignedIDsDict, kestrel_request, text_is_not_empty
+from ..gene_symbol_resolver import GeneSymbolResolver
 from .base import BaseAnnotator
+
+# Score assigned to a node recovered by the deterministic symbol fallback. Modest and fixed: the result
+# is a verified identity match, but it bypassed competitive search, so it must not be reported as a top
+# search hit. The `resolved_via` provenance marker is the authoritative signal, not this score.
+_FALLBACK_SCORE = 1.0
 
 
 class KestrelHybridSearchAnnotator(BaseAnnotator):
 
     slug = "kestrel-hybrid-search"
+
+    def __init__(self) -> None:
+        # Annotator-owned resolver (arg-free construction preserves the registry pattern; no network here).
+        self._resolver = GeneSymbolResolver()
 
     def get_annotations(
         self,
@@ -41,12 +56,24 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
                 term_results = results[search_term]
 
             annotations: dict[str, dict[str, dict[str, Any]]] = {}
-            chosen = self._select_result(term_results, search_term, prefer_human)
+            chosen, matched = self._select_result(term_results, search_term, prefer_human)
+
+            # Miss path: no HGNC + exact-symbol match was found among the search rows (ortholog fallback,
+            # empty results, or a best-HGNC paralog). For the curated drug-conflated symbols, the human
+            # node is unreachable by search, so resolve it deterministically (non-search) and verify.
+            if prefer_human and GENE_SYMBOL_FALLBACK_ENABLED and not matched:
+                resolved_curie = self._resolver.resolve(search_term)
+                if resolved_curie is not None:
+                    chosen = {"id": resolved_curie, "score": _FALLBACK_SCORE, "resolved_via": "symbol_fallback"}
+
             if chosen is not None:
                 node_id = chosen["id"]
                 score = chosen["score"]
                 vocab, local_id = node_id.split(":", 1)
-                annotations.setdefault(vocab, {})[local_id] = {"score": score}
+                metadata: dict[str, Any] = {"score": score}
+                if chosen.get("resolved_via"):
+                    metadata["resolved_via"] = chosen["resolved_via"]
+                annotations.setdefault(vocab, {})[local_id] = metadata
 
             return {self.slug: annotations}
         else:
@@ -89,31 +116,39 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
     # ----------------------------------------- Helper methods ----------------------------------------------- #
 
     @staticmethod
-    def _select_result(term_results: list[dict] | None, search_term: str, prefer_human: bool) -> dict | None:
-        """Select one candidate row from a hybrid-search result list.
+    def _select_result(
+        term_results: list[dict] | None, search_term: str, prefer_human: bool
+    ) -> tuple[dict | None, bool]:
+        """Select one candidate row, and report whether it is a genuine human-gene match.
+
+        Returns ``(chosen_row, matched)`` where ``matched`` is True only when ``chosen_row`` is an
+        HGNC-bearing row that exact-symbol-matches the query. ``matched`` is False for an empty result,
+        the legacy top-1, the ortholog fallback, and the best-HGNC-but-no-symbol-match (paralog) case —
+        all of which the caller treats as a miss eligible for the deterministic symbol fallback.
 
         Two-tier human preference (finalized from the 2026-06-15 live spike):
         1. Filter to human (HGNC-bearing) rows; if none, fall back to the top-scored candidate.
-        2. Among human rows, prefer those whose symbol matches the query (``name`` or a synonym);
-           if none match, keep all human rows (avoids over-rejecting alias queries to an ortholog).
-        3. Return the highest-scoring row of that pool.
+        2. Among human rows, prefer those whose symbol matches the query (``name`` or a synonym). A
+           symbol-matched pick is the only genuine "match"; the no-symbol-match fallback is not.
+        3. Return the highest-scoring row of the chosen pool.
 
         The HGNC filter must precede the symbol match because orthologs share the human row's ``name``
         (same symbol, different species) — HGNC separates species, the symbol match picks the right gene.
-        Returns None for an empty/None result list.
         """
         if not term_results:
-            return None
+            return None, False
         if not prefer_human:
-            return term_results[0]
+            return term_results[0], False
 
         human = [r for r in term_results if HUMAN_MARKER_PREFIXES & set(r.get("prefixes") or [])]
         if not human:
-            return term_results[0]
+            return term_results[0], False
 
         exact = [r for r in human if KestrelHybridSearchAnnotator._symbol_matches(r, search_term)]
-        pool = exact if exact else human
-        return max(pool, key=lambda r: r.get("score", 0))
+        if exact:
+            return max(exact, key=lambda r: r.get("score", 0)), True
+        # HGNC rows exist but none symbol-match the query (e.g. a paralog) — not a genuine match.
+        return max(human, key=lambda r: r.get("score", 0)), False
 
     @staticmethod
     def _symbol_matches(row: dict, search_term: str) -> bool:
