@@ -43,6 +43,13 @@ class TestGeneSymbolResolver:
         assert GeneSymbolResolver().resolve("GH1") is None
 
     @patch("biomapper2.core.gene_symbol_resolver.kestrel_request")
+    def test_accepts_symbol_as_node_name(self, mock_req):
+        """Symbol carried in `name` (not synonyms) still verifies — robust to upstream de-conflation."""
+        node = {"name": "GH1", "synonyms": ["growth hormone 1"], "equivalent_ids": ["HGNC:4261"]}
+        mock_req.return_value = {"NCBIGene:2688": node}
+        assert GeneSymbolResolver().resolve("GH1") == "NCBIGene:2688"
+
+    @patch("biomapper2.core.gene_symbol_resolver.kestrel_request")
     def test_accepts_lowercase_hgnc_prefix(self, mock_req):
         """The HGNC marker is matched case-insensitively, so a lower-cased prefix still verifies."""
         mock_req.return_value = {"NCBIGene:2688": _node(["SOMATROPIN", "GH1"], ["NCBIGene:2688", "hgnc:4261"])}

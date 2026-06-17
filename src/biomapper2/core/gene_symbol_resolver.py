@@ -12,6 +12,8 @@ a no-op for every other symbol. This is a temporary measure; the durable fix is 
 exact-symbol retrieval / de-conflation). See docs/plans/2026-06-17-001-feat-gene-symbol-fallback-resolver-plan.md.
 """
 
+import logging
+
 from ..config import HUMAN_MARKER_PREFIXES, KESTREL_BATCH_SIZE_CANONICALIZE
 from ..utils import kestrel_request
 
@@ -42,8 +44,8 @@ class GeneSymbolResolver:
         """Return the canonical human NCBIGene CURIE for a curated symbol, else None.
 
         Returns None (a no-op) for any non-curated symbol, and rejects a curated symbol whose node
-        does not carry the queried symbol as a synonym or lacks an HGNC equivalent — never fabricates
-        and never returns a different human gene.
+        does not carry the queried symbol (as its name or a synonym) or lacks an HGNC equivalent —
+        never fabricates and never returns a different human gene.
         """
         if not symbol:
             return None
@@ -61,16 +63,25 @@ class GeneSymbolResolver:
                 batch_size=KESTREL_BATCH_SIZE_CANONICALIZE,
                 json={"slim": False, "truncate_long_fields": False},
             )
-        except Exception:
+        except Exception as exc:
+            # Network errors are already logged + re-raised upstream by the request layer; this guard
+            # exists for non-network failures (e.g. a malformed response body). Log so a curated gene
+            # silently ceasing to resolve leaves a diagnostic trace instead of vanishing.
+            logging.warning(f"gene-symbol fallback: get-nodes failed for {curie} ({symbol!r}): {exc}")
             return None  # honest fallback on any Kestrel error
 
         node = nodes.get(curie) if isinstance(nodes, dict) else None
         if not isinstance(node, dict):
             return None
 
-        # Verify identity (queried symbol present as a synonym), not just humanity (HGNC present).
-        synonyms = {str(s).strip().casefold() for s in (node.get("synonyms") or [])}
-        if key not in synonyms:
+        # Verify identity (queried symbol present on the node), not just humanity (HGNC present). Match
+        # on the node `name` OR a synonym, mirroring _select_result._symbol_matches so the two identity
+        # checks cannot diverge: today the curated nodes are drug-named with the symbol in `synonyms`,
+        # but if upstream de-conflation moves the symbol back into `name`, accepting either keeps the
+        # guard correct instead of silently rejecting a now-corrected node.
+        identity = {str(s).strip().casefold() for s in (node.get("synonyms") or [])}
+        identity.add(str(node.get("name", "")).strip().casefold())
+        if key not in identity:
             return None
         # Match on the CURIE prefix, case-insensitively, against the shared human-marker set — a
         # case-sensitive `startswith("HGNC:")` would silently reject a node whose equivalent ids
