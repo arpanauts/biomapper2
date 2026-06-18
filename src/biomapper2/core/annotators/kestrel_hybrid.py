@@ -70,9 +70,11 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
                 resolved_curie = self._resolver.resolve(search_term)
                 if resolved_curie is not None:
                     chosen = {"id": resolved_curie, "score": _FALLBACK_SCORE, "resolved_via": "symbol_fallback"}
-            # Canonical-namespace preference (non-gene categories). This is an `elif`: the engine sets
-            # preferred_prefixes only when prefer_human is off for this category, so the two policies are
-            # mutually exclusive — and even if a direct caller set both, the gene branch above wins.
+            # Canonical-namespace preference (non-gene categories). Mutual exclusivity with the gene path
+            # is enforced by the *engine*, which sets preferred_prefixes only when prefer_human is off for
+            # this category — not by this branch structure. (As an `elif` on the gene `if`, a hypothetical
+            # caller passing both an effective prefer_human and preferred_prefixes would, on a genuine gene
+            # match, fall through to here and override it; that combination never occurs via the engine.)
             elif preferred_prefixes:
                 chosen, is_canonical = self._select_canonical(term_results, preferred_prefixes, search_term)
                 if chosen is not None and is_canonical:
