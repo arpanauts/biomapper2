@@ -64,11 +64,14 @@ class GeneSymbolResolver:
                 json={"slim": False, "truncate_long_fields": False},
             )
         except Exception as exc:
-            # Network errors are already logged + re-raised upstream by the request layer; this guard
-            # exists for non-network failures (e.g. a malformed response body). Log so a curated gene
-            # silently ceasing to resolve leaves a diagnostic trace instead of vanishing.
+            # Catch-all by design: ANY /get-nodes failure — a Kestrel outage (already logged by the
+            # request layer) or a non-network failure like a malformed/changed response body — is
+            # suppressed here to an honest no-op (the entity falls back to whatever the search step
+            # chose, typically an ortholog). Nothing propagates to the caller, so this warning is the
+            # ONLY signal that a curated gene stopped resolving — there is no exception, test failure,
+            # or alert. (A Kestrel outage therefore silently disables the bridge for all six genes.)
             logging.warning(f"gene-symbol fallback: get-nodes failed for {curie} ({symbol!r}): {exc}")
-            return None  # honest fallback on any Kestrel error
+            return None
 
         node = nodes.get(curie) if isinstance(nodes, dict) else None
         if not isinstance(node, dict):

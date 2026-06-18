@@ -146,11 +146,13 @@ class TestHumanGeneGoldSet:
         assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
 
     def test_drug_conflated_resolves_via_fallback(self, gold_set_run):
-        """The drug-conflated genes (unreachable by any Kestrel search) resolve via the curated bridge.
+        """The drug-conflated genes resolve into the expected clique; while still conflated, via the bridge.
 
-        Asserts the mechanism (the provenance marker proves the bridge fired) and that resolution lands in
-        the expected gene's clique. Note the KG canonicalizes these into a drug/chemical representative
-        (so `chosen_kg_id` is e.g. CHEBI/UNII, not the NCBIGene) — clique membership is what's achievable.
+        Hard assertion: each lands in the expected gene's clique (the KG canonicalizes these into a
+        drug/chemical representative, so `chosen_kg_id` is e.g. CHEBI/UNII, not the NCBIGene). The bridge
+        marker is required **only while a gene is still conflated** (not resolving to its exact NCBIGene):
+        if upstream Babel/Kestrel de-conflates one — the documented desired fix — it becomes
+        search-recoverable (`is_exact`) and no longer needs the bridge, which must NOT read as a regression.
         """
         for name in ("GH1", "CALCA", "POMC", "CRH", "CTLA4", "GBA1"):
             row = next(r for r in gold_set_run["rows"] if r["name"] == name)
@@ -158,12 +160,15 @@ class TestHumanGeneGoldSet:
                 "resolved_to_clique"
             ], f"{name} -> {row['chosen_kg_id']} whose clique does not contain {POSITIVE_GOLD[name]}"
             assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
-            assert row["resolved_via"] == "symbol_fallback", f"{name} did not resolve via the curated bridge"
+            if not row["is_exact"]:
+                # Still conflated -> the only way it reached the right clique is the curated bridge.
+                assert row["resolved_via"] == "symbol_fallback", f"{name} did not resolve via the curated bridge"
 
     def test_resolution_and_bridge_usage_reported(self, gold_set_run):
         """The run quantifies clique resolution and how often the bridge fired (R8 observability)."""
         assert 0.0 <= gold_set_run["fallback_fraction"] <= 1.0
-        # Every gold gene should resolve into its expected human-gene clique.
+        # Hard gate: every gold gene resolves into its expected human-gene clique.
         assert gold_set_run["n_resolved_to_clique"] == gold_set_run["n_positive"]
-        # The fraction is read from real provenance: exactly the six drug-conflated genes use the bridge.
-        assert gold_set_run["n_resolved_via_bridge"] == 6
+        # Bridge usage is bounded by the curated set, not hard-pinned to 6: upstream de-conflation (the
+        # desired fix) reduces it as genes become search-recoverable — that is success, not a regression.
+        assert 0 <= gold_set_run["n_resolved_via_bridge"] <= 6
