@@ -34,24 +34,29 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
         category: str,
         prefixes: list[str] | None = None,
         prefer_human: bool = True,
+        preferred_prefixes: set[str] | None = None,
         cache: dict | None = None,
     ) -> AssignedIDsDict:
         """Implements BaseAnnotator.get_annotations.
 
-        When ``prefer_human`` is True the annotator retrieves multiple candidates and selects the
-        human (HGNC-bearing) one that matches the queried symbol, falling back to the top-scored
-        candidate on a miss (see ``_select_result``). When False it keeps the legacy top-1 behavior.
-        The engine passes the *applicability-gated* value (True only for gene/protein categories).
+        Two mutually-exclusive re-ranking policies, both gated by the engine (which sets at most one):
+        - ``prefer_human`` (gene/protein): select the human (HGNC-bearing) candidate matching the queried
+          symbol, with the curated drug-conflated fallback on a miss (see ``_select_result``).
+        - ``preferred_prefixes`` (other categories, e.g. metabolite/disease): prefer the canonical-namespace
+          candidate that matches the query, falling back to the top-scored canonical or — on an empty
+          canonical pool — the overall top-scored row (see ``_select_canonical``).
+        With neither active, the legacy top-1 behavior is kept.
         """
 
         # Extract the value to search
         search_term = entity.get(name_field)
         if text_is_not_empty(search_term):
-            # Use cache if available, otherwise make API call
+            # Use cache if available, otherwise make API call. The wider candidate window is needed for
+            # either re-ranking policy (the canonical/human node often ranks below the conflated top hit).
             if cache:
                 term_results = cache.get(search_term)
             else:
-                limit = HYBRID_SEARCH_LIMIT if prefer_human else 1
+                limit = HYBRID_SEARCH_LIMIT if (prefer_human or preferred_prefixes) else 1
                 results = self._kestrel_hybrid_search(search_term, category, prefixes, limit=limit)
                 term_results = results[search_term]
 
@@ -65,6 +70,14 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
                 resolved_curie = self._resolver.resolve(search_term)
                 if resolved_curie is not None:
                     chosen = {"id": resolved_curie, "score": _FALLBACK_SCORE, "resolved_via": "symbol_fallback"}
+            # Canonical-namespace preference (non-gene categories). The engine sets preferred_prefixes only
+            # when prefer_human is off for this category, so the two policies never compete.
+            elif preferred_prefixes:
+                canonical = self._select_canonical(term_results, preferred_prefixes, search_term)
+                chosen = canonical
+                if canonical is not None and str(canonical.get("id", "")).split(":", 1)[0] in preferred_prefixes:
+                    # Tag only a genuine canonical pick (not the empty-pool fallback to the top-scored row).
+                    chosen = {**canonical, "resolved_via": "canonical_preference"}
 
             if chosen is not None:
                 node_id = chosen["id"]
@@ -87,6 +100,7 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
         category: str,
         prefixes: list[str] | None = None,
         prefer_human: bool = True,
+        preferred_prefixes: set[str] | None = None,
     ) -> pd.Series:  # Series of AssignedIDsDicts
         """Implements BaseAnnotator.get_annotations_bulk"""
 
@@ -94,13 +108,14 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
         search_terms = [t for t in entities[name_field].tolist() if text_is_not_empty(t)]
 
         logging.info(f"Getting hybrid search results from Kestrel API for {len(entities)} entities")
-        # Only enlarge the candidate window when human-preference is active (keeps payloads small for
-        # metabolite/other bulk jobs where the re-ranking does not apply).
-        limit = HYBRID_SEARCH_LIMIT if prefer_human else 1
+        # Enlarge the candidate window when either re-ranking policy is active (keeps payloads small for
+        # bulk jobs where no re-ranking applies).
+        limit = HYBRID_SEARCH_LIMIT if (prefer_human or preferred_prefixes) else 1
         results = self._kestrel_hybrid_search(search_terms, category, prefixes, limit=limit)
 
         # Annotate each entity using the results from the bulk request. The internal re-dispatch MUST
-        # forward prefer_human, otherwise the bulk path would silently use the get_annotations default.
+        # forward BOTH prefer_human and preferred_prefixes, otherwise the bulk path would silently use the
+        # get_annotations defaults (a silent no-op for the canonical re-rank on dataset jobs).
         assigned_ids_col = entities.apply(
             self.get_annotations,
             axis=1,
@@ -109,6 +124,7 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
             category=category,
             prefixes=prefixes,
             prefer_human=prefer_human,
+            preferred_prefixes=preferred_prefixes,
         )
 
         return cast(pd.Series, assigned_ids_col)
@@ -149,6 +165,34 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
             return max(exact, key=lambda r: r.get("score", 0)), True
         # HGNC rows exist but none symbol-match the query (e.g. a paralog) — not a genuine match.
         return max(human, key=lambda r: r.get("score", 0)), False
+
+    @staticmethod
+    def _select_canonical(
+        term_results: list[dict] | None, preferred_prefixes: set[str], search_term: str
+    ) -> dict | None:
+        """Select the canonical-namespace candidate for a non-gene category, else the honest top-1.
+
+        Validated against live Kestrel data (2026-06-18): within a category the canonical node (CHEBI/HMDB/
+        RM for metabolites, MONDO for disease) routinely scores well *below* a conflated non-canonical node
+        (UMLS/ICD/KEGG/PANTHER), so score is not a gate — the namespace filter plus an identity match is the
+        discriminator. There is deliberately **no score-margin guard**.
+
+        1. Filter to rows whose ``id`` namespace is in ``preferred_prefixes`` (the chosen row's id is the
+           assigned CURIE, so this guarantees a canonical result — not merely a cross-referenced one).
+        2. Empty pool → honest fallback to the overall top-scored row (never fabricate a canonical CURIE).
+        3. Among the pool, prefer the rows whose ``name``/synonym matches the query (reuses ``_symbol_matches``
+           directly), then take the highest-scoring of that sub-pool; if none match, the top-scored canonical
+           row. This picks the right concept among same-namespace homonyms (e.g. CHEBI isomers) and the right
+           specific node when the query does not exact-match any name (e.g. the top-scored MONDO for a disease).
+        """
+        if not term_results:
+            return None
+        pool = [r for r in term_results if str(r.get("id", "")).split(":", 1)[0] in preferred_prefixes]
+        if not pool:
+            return term_results[0]
+        exact = [r for r in pool if KestrelHybridSearchAnnotator._symbol_matches(r, search_term)]
+        candidates = exact if exact else pool
+        return max(candidates, key=lambda r: r.get("score", 0))
 
     @staticmethod
     def _symbol_matches(row: dict, search_term: str) -> bool:

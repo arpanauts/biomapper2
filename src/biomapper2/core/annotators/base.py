@@ -36,6 +36,7 @@ class BaseAnnotator(ABC):  # Inherit from ABC
         category: str,
         prefixes: list[str] | None = None,
         prefer_human: bool = True,
+        preferred_prefixes: set[str] | None = None,
         cache: dict | None = None,
     ) -> AssignedIDsDict:
         """
@@ -49,6 +50,9 @@ class BaseAnnotator(ABC):  # Inherit from ABC
             prefer_human: When True (and the category is gene/protein-applicable, as gated by the
                 engine), prefer the human (HGNC-bearing) candidate. Honored only by annotators where
                 a human marker applies; others accept and ignore it.
+            preferred_prefixes: When set (the engine resolves it for non-gene categories with a configured
+                canonical-namespace policy), prefer the candidate in that namespace set. Honored only by
+                annotators that re-rank (hybrid search); others accept and ignore it.
             cache: Optional pre-fetched results from bulk API call
 
         Returns:
@@ -64,6 +68,7 @@ class BaseAnnotator(ABC):  # Inherit from ABC
         category: str,
         prefixes: list[str] | None = None,
         prefer_human: bool = True,
+        preferred_prefixes: set[str] | None = None,
     ) -> pd.Series:  # Series of AssignedIdsDicts
         """
         Get annotations for multiple entities with bulk API call.
@@ -74,6 +79,7 @@ class BaseAnnotator(ABC):  # Inherit from ABC
             category: Biolink category (standardized entity type)
             prefixes: Allowed (standardized) curie prefixes to map to (e.g., 'CHEBI', 'MONDO')
             prefer_human: See get_annotations. Accepted by all annotators; honored where applicable.
+            preferred_prefixes: See get_annotations. Accepted by all annotators; honored where applicable.
 
         Returns:
             Column (Series) of annotation results (same index as input)
