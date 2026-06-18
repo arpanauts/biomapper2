@@ -1,10 +1,14 @@
 """Live merge-gate validation: human genes/proteins must resolve to the human node, not an ortholog.
 
 Marked `integration` (hits the live Kestrel API). Runs the full pipeline via Mapper.map_entity_to_kg
-with the default-on prefer_human behavior, asserts each positive gold entity resolves to the expected
-human NCBIGene carrying an HGNC marker, and persists a timestamped report (per the experiment-artifact
-SOP). GH1 is a negative control: its human node is absent from Kestrel hybrid-search even at limit=50
-(verified 2026-06-15), so it is expected to fall back gracefully and is counted in the fallback fraction.
+with the default-on prefer_human behavior, asserts each gold entity resolves to the expected human
+NCBIGene carrying an HGNC marker, and persists a timestamped report (per the experiment-artifact SOP).
+
+Two classes of positive case:
+- Search-recoverable (TNFRSF1A/TNFRSF1B/LDLR): the human node is in the candidate set and `prefer_human`
+  re-ranking selects it. The TNFRSF1A/TNFRSF1B pair exercises the paralog guard.
+- Drug-conflated (GH1/CALCA/POMC/CRH/CTLA4/GBA1): the human node is unreachable by any Kestrel search
+  (conflated into a drug node), so it resolves only via the curated gene-symbol fallback bridge.
 """
 
 import json
@@ -14,20 +18,45 @@ import pytest
 
 from biomapper2.config import PROJECT_ROOT
 
-# Positive cases: must resolve to the expected human NCBIGene (verified at rank ~#4 in the Unit 1 spike).
-# Includes a paralog pair (TNFRSF1A/TNFRSF1B) to exercise the R7 wrong-paralog guard against live data.
+# All gold entities must resolve to the expected human NCBIGene carrying an HGNC marker.
 POSITIVE_GOLD = {
+    # Search-recoverable (prefer_human re-ranking); includes a paralog pair (R7 guard).
     "TNFRSF1A": "NCBIGene:7132",
     "TNFRSF1B": "NCBIGene:7133",
     "LDLR": "NCBIGene:3949",
+    # Drug-conflated: unreachable by search, resolved via the curated symbol fallback bridge.
+    "GH1": "NCBIGene:2688",
+    "CALCA": "NCBIGene:796",
+    "POMC": "NCBIGene:5443",
+    "CRH": "NCBIGene:1392",
+    "CTLA4": "NCBIGene:1493",
+    "GBA1": "NCBIGene:2629",
 }
-# Negative control: human node absent from Kestrel candidates -> expected to fall back (Kestrel recall gap).
-NEGATIVE_CONTROL = {"GH1": "NCBIGene:2688"}
+
+
+# Slug of the annotator that owns the symbol-fallback bridge (see core/annotators/kestrel_hybrid.py).
+HYBRID_SLUG = "kestrel-hybrid-search"
 
 
 def _has_hgnc(result: dict) -> bool:
     """True if the resolved node carries an HGNC marker in its equivalent ids."""
     return "HGNC" in json.dumps(result.get("kg_equivalent_ids", {}))
+
+
+def _resolved_via(result: dict) -> str | None:
+    """Provenance marker for an assigned id, read from the preserved per-annotator ``assigned_ids``.
+
+    The symbol-fallback bridge tags its assigned id with ``resolved_via='symbol_fallback'``. That
+    marker is retained on the entity's ``assigned_ids`` (and surfaced in the API response) even though
+    the normalized curie/resolution layers do not carry it — so the gold-set can measure *actual*
+    bridge usage rather than inferring it from a chosen-id mismatch.
+    """
+    assigned = result.get("assigned_ids", {}) or {}
+    for vocab_map in (assigned.get(HYBRID_SLUG, {}) or {}).values():
+        for meta in (vocab_map or {}).values():
+            if isinstance(meta, dict) and meta.get("resolved_via"):
+                return str(meta["resolved_via"])
+    return None
 
 
 def _map_gene(shared_mapper, name: str) -> dict:
@@ -43,7 +72,7 @@ def _map_gene(shared_mapper, name: str) -> dict:
 def gold_set_run(shared_mapper):
     """Run the full gold set live once, persist a timestamped report, and return the per-entity results."""
     rows = []
-    for name, expected in {**POSITIVE_GOLD, **NEGATIVE_CONTROL}.items():
+    for name, expected in POSITIVE_GOLD.items():
         result = _map_gene(shared_mapper, name)
         chosen = result.get("chosen_kg_id")
         rows.append(
@@ -53,19 +82,23 @@ def gold_set_run(shared_mapper):
                 "chosen_kg_id": chosen,
                 "is_expected_human": chosen == expected,
                 "has_hgnc": _has_hgnc(result),
+                "resolved_via": _resolved_via(result),
                 "is_positive": name in POSITIVE_GOLD,
             }
         )
 
     positives = [r for r in rows if r["is_positive"]]
-    fell_back = [r for r in rows if not r["is_expected_human"]]
+    # Fraction of entities resolved through the curated symbol-fallback bridge (read from the
+    # preserved provenance marker, not inferred from a chosen-id mismatch) — the real R8 signal.
+    via_bridge = [r for r in rows if r["resolved_via"] == "symbol_fallback"]
     report = {
         "generated_utc": datetime.now(timezone.utc).isoformat(),
         "prefer_human": True,
         "n_total": len(rows),
         "n_positive": len(positives),
         "n_positive_resolved": sum(r["is_expected_human"] for r in positives),
-        "fallback_fraction": round(len(fell_back) / len(rows), 3),
+        "n_resolved_via_bridge": len(via_bridge),
+        "fallback_fraction": round(len(via_bridge) / len(rows), 3),
         "rows": rows,
     }
 
@@ -88,35 +121,23 @@ class TestHumanGeneGoldSet:
         assert row["chosen_kg_id"] == POSITIVE_GOLD[name], f"{name} -> {row['chosen_kg_id']} (expected human)"
         assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
 
-    def test_gh1_negative_control_falls_back_gracefully(self, gold_set_run):
-        """GH1's human gene node is unreachable by symbol in Kestrel -> pipeline must return a node, not crash.
+    def test_drug_conflated_resolves_via_fallback(self, gold_set_run):
+        """The drug-conflated genes (unreachable by any Kestrel search) resolve via the curated bridge.
 
-        This asserts only graceful behavior (a node is chosen), which holds whether or not the upstream
-        Kestrel/Translator data issue is ever fixed -- so it is NOT brittle.
+        Asserts both the outcome (correct human node) AND the mechanism (the provenance marker proves
+        the bridge fired) — so a future regression where search starts surfacing these by coincidence
+        cannot pass this test silently.
         """
-        row = next(r for r in gold_set_run["rows"] if r["name"] == "GH1")
-        assert row["chosen_kg_id"] is not None  # graceful fallback (honest miss), no exception
-
-    @pytest.mark.xfail(
-        reason=(
-            "Upstream Translator/Kestrel entity-conflation, NOT a biomapper2 bug or a simple recall gap: "
-            "NCBIGene:2688 exists but is an over-merged clique whose preferred name is 'SOMATROPIN' "
-            "(recombinant hGH drug) with only pharmaceutical synonyms and no 'GH1' gene-symbol text, so "
-            "no search mode (text/vector/hybrid) retrieves it by 'GH1' even at limit=50 (verified live "
-            "2026-06-16). This is the documented Babel/NodeNormalization GeneProtein + DrugChemical "
-            "conflation collapsing GH1 gene -> growth-hormone protein -> somatropin drug into one node. "
-            "xfail (strict=False) documents it without blocking CI; auto-passes (xpass) if the KG node is "
-            "corrected upstream -- a Kestrel/Translator data fix, not a biomapper2 one."
-        ),
-        strict=False,
-    )
-    def test_gh1_should_resolve_to_human_when_upstream_conflation_fixed(self, gold_set_run):
-        """Records the desired GH1 outcome; xfails today, xpasses if the upstream conflation is corrected."""
-        row = next(r for r in gold_set_run["rows"] if r["name"] == "GH1")
-        assert row["chosen_kg_id"] == NEGATIVE_CONTROL["GH1"]
+        for name in ("GH1", "CALCA", "POMC", "CRH", "CTLA4", "GBA1"):
+            row = next(r for r in gold_set_run["rows"] if r["name"] == name)
+            assert row["chosen_kg_id"] == POSITIVE_GOLD[name], f"{name} -> {row['chosen_kg_id']} (expected human)"
+            assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
+            assert row["resolved_via"] == "symbol_fallback", f"{name} did not resolve via the curated bridge"
 
     def test_fallback_fraction_reported(self, gold_set_run):
-        """The run quantifies and persists the fallback fraction (R8 observability)."""
+        """The run quantifies and persists how often the bridge fired (R8 observability)."""
         assert 0.0 <= gold_set_run["fallback_fraction"] <= 1.0
-        # All positives should resolve; only the negative control is expected to fall back.
+        # With the curated fallback bridge in place, every gold gene should resolve to its human node.
         assert gold_set_run["n_positive_resolved"] == gold_set_run["n_positive"]
+        # The fraction is read from real provenance: exactly the six drug-conflated genes use the bridge.
+        assert gold_set_run["n_resolved_via_bridge"] == 6

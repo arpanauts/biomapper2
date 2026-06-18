@@ -52,3 +52,8 @@ HYBRID_SEARCH_LIMIT = 20
 # Human-only CURIE prefixes. HGNC assigns IDs only to human genes, so its presence in a hybrid-search
 # row's `prefixes` marks the human node. Any prefix added here must itself be human-exclusive.
 HUMAN_MARKER_PREFIXES = {"HGNC"}
+
+# Kill switch for the curated gene-symbol fallback bridge (see core/gene_symbol_resolver.py). When True
+# (default), gene/protein resolution misses for the curated drug-conflated symbols are resolved via the
+# deterministic non-search fallback. Set False to disable the bridge without a code revert.
+GENE_SYMBOL_FALLBACK_ENABLED = True
