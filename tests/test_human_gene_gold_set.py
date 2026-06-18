@@ -145,14 +145,17 @@ class TestHumanGeneGoldSet:
         ], f"{name} -> {row['chosen_kg_id']} whose clique does not contain {POSITIVE_GOLD[name]}"
         assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
 
-    def test_drug_conflated_resolves_via_fallback(self, gold_set_run):
-        """The drug-conflated genes resolve into the expected clique; while still conflated, via the bridge.
+    def test_drug_conflated_resolve_into_clique(self, gold_set_run):
+        """The drug-conflated genes resolve into the expected human-gene clique.
 
-        Hard assertion: each lands in the expected gene's clique (the KG canonicalizes these into a
-        drug/chemical representative, so `chosen_kg_id` is e.g. CHEBI/UNII, not the NCBIGene). The bridge
-        marker is required **only while a gene is still conflated** (not resolving to its exact NCBIGene):
-        if upstream Babel/Kestrel de-conflates one — the documented desired fix — it becomes
-        search-recoverable (`is_exact`) and no longer needs the bridge, which must NOT read as a regression.
+        Correctness gate only: each lands in the expected gene's clique (the KG canonicalizes these into a
+        drug/chemical representative, so `chosen_kg_id` is e.g. CHEBI/UNII, not the NCBIGene). We do NOT
+        assert *which mechanism* got it there — the bridge marker (`resolved_via='symbol_fallback'`) is a
+        live-variable signal: depending on Kestrel recall, the conflated HGNC node may itself surface in the
+        gene search (e.g. CHEBI:65307 carries 'CRH' as a synonym and ranks in the window), so `_select_result`
+        picks it directly with no bridge — a correct outcome with `resolved_via=None`. The bridge mechanism
+        is hard-verified deterministically by the offline unit tests (test_kestrel_hybrid_fallback.py,
+        test_gene_symbol_resolver.py); this live gate asserts only the end-to-end clique resolution.
         """
         for name in ("GH1", "CALCA", "POMC", "CRH", "CTLA4", "GBA1"):
             row = next(r for r in gold_set_run["rows"] if r["name"] == name)
@@ -160,9 +163,6 @@ class TestHumanGeneGoldSet:
                 "resolved_to_clique"
             ], f"{name} -> {row['chosen_kg_id']} whose clique does not contain {POSITIVE_GOLD[name]}"
             assert row["has_hgnc"], f"{name} resolved node lacks an HGNC marker"
-            if not row["is_exact"]:
-                # Still conflated -> the only way it reached the right clique is the curated bridge.
-                assert row["resolved_via"] == "symbol_fallback", f"{name} did not resolve via the curated bridge"
 
     def test_resolution_and_bridge_usage_reported(self, gold_set_run):
         """The run quantifies clique resolution and how often the bridge fired (R8 observability)."""
