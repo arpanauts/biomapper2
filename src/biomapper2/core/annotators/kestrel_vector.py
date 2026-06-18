@@ -19,6 +19,7 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
         category: str,
         prefixes: list[str] | None = None,
         prefer_human: bool = True,  # accepted for interface parity; not applicable to vector search
+        preferred_prefixes: set[str] | None = None,  # accepted for interface parity; not applicable
         cache: dict | None = None,
     ) -> AssignedIDsDict:
         """Implements BaseAnnotator.get_annotations"""
@@ -53,6 +54,7 @@ class KestrelVectorSearchAnnotator(BaseAnnotator):
         category: str,
         prefixes: list[str] | None = None,
         prefer_human: bool = True,  # accepted for interface parity; not applicable to vector search
+        preferred_prefixes: set[str] | None = None,  # accepted for interface parity; not applicable
     ) -> pd.Series:  # Series of AssignedIDsDicts
         """Implements BaseAnnotator.get_annotations_bulk"""
 

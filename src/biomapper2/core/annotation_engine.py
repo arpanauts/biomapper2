@@ -12,6 +12,7 @@ from typing import Any
 import pandas as pd
 
 from ..biolink_client import BiolinkClient
+from ..config import CATEGORY_PREFERRED_NAMESPACES
 from ..utils import AnnotationMode, AssignedIDsDict
 from .annotators.base import BaseAnnotator
 from .annotators.kestrel_hybrid import KestrelHybridSearchAnnotator
@@ -46,6 +47,7 @@ class AnnotationEngine:
         mode: AnnotationMode = "missing",
         annotators: list[str] | None = None,
         prefer_human: bool = True,
+        prefer_canonical: bool = True,
     ) -> pd.DataFrame | pd.Series:
         """
         Annotate entity with additional vocab IDs, obtained using various internal or external methods.
@@ -64,6 +66,10 @@ class AnnotationEngine:
             prefer_human: When True, prefer the human (HGNC-bearing) candidate for gene/protein
                 categories. This engine gates applicability by category (see below) and passes the
                 resolved, effective flag to the annotators.
+            prefer_canonical: When True, prefer the canonical-namespace candidate for non-gene
+                categories with a configured policy (e.g. CHEBI/HMDB/RM for metabolites, MONDO for
+                disease). The engine resolves the category's preferred-prefix set and passes it down;
+                gene/protein categories never receive a set (they use prefer_human).
 
         Returns:
             AssignedIDsDict (in a named Series) for single entity, and in a single-column
@@ -77,9 +83,18 @@ class AnnotationEngine:
         # Resolve the effective flag here so annotators receive an already-gated boolean.
         effective_prefer_human = prefer_human and self._is_human_applicable_category(category)
 
+        # Canonical-namespace preference applies to non-gene categories with a configured policy. The
+        # `not effective_prefer_human` clause enforces the mutually-exclusive partition (a category that
+        # is gene/protein-applicable never also receives a canonical set), even if the descendant sets
+        # overlap via mixins. None means "no canonical re-rank for this category".
+        effective_preferred_prefixes = (
+            self._category_preferred_prefixes.get(category) if prefer_canonical and not effective_prefer_human else None
+        )
+
         logging.info(
             f"Beginning annotation step.. (mode={mode}, annotators={annotators}, "
-            f"prefer_human={prefer_human}, effective_prefer_human={effective_prefer_human})"
+            f"prefer_human={prefer_human}, effective_prefer_human={effective_prefer_human}, "
+            f"prefer_canonical={prefer_canonical}, effective_preferred_prefixes={effective_preferred_prefixes})"
         )
 
         # Skip annotation if user requested it
@@ -119,6 +134,7 @@ class AnnotationEngine:
                     prefixes,
                     annotators_to_use,
                     effective_prefer_human,
+                    effective_preferred_prefixes,
                 )
             else:
                 return self._annotate_single(
@@ -130,6 +146,7 @@ class AnnotationEngine:
                     prefixes,
                     annotators_to_use,
                     effective_prefer_human,
+                    effective_preferred_prefixes,
                 )
         else:
             return self._get_empty_assigned_ids(item)
@@ -151,6 +168,22 @@ class AnnotationEngine:
     def _is_human_applicable_category(self, category: str) -> bool:
         """True if the category is a gene/protein (or Biolink descendant), where human-preference applies."""
         return category in self._human_applicable_categories
+
+    @cached_property
+    def _category_preferred_prefixes(self) -> dict[str, set[str]]:
+        """Map every category in the canonical-namespace policy (incl. Biolink descendants) to its set.
+
+        Expands each configured key (e.g. ``biolink:SmallMolecule``, ``biolink:Disease``) via
+        ``get_descendants`` so subcategories inherit the policy, mirroring ``_human_applicable_categories``.
+        Cached per instance: the Biolink hierarchy is static at runtime. If two configured keys' descendant
+        sets overlap (e.g. via a shared mixin), the shared category inherits the **union** of both policies'
+        prefixes rather than silently dropping one.
+        """
+        resolved: dict[str, set[str]] = {}
+        for category, prefixes in CATEGORY_PREFERRED_NAMESPACES.items():
+            for descendant in self.biolink_client.get_descendants(category):
+                resolved.setdefault(descendant, set()).update(prefixes)
+        return resolved
 
     def _select_annotators(self, category: str) -> list[str]:
         """Select appropriate annotators based on entity type (returns their slugs)."""
@@ -177,6 +210,7 @@ class AnnotationEngine:
         prefixes: list[str],
         annotators: list,
         prefer_human: bool = True,
+        preferred_prefixes: set[str] | None = None,
     ) -> pd.DataFrame:
         """Annotate an entire DataFrame. Returns a single-column DataFrame containing AssignedIDsDicts."""
         if mode == "missing":
@@ -201,7 +235,12 @@ class AnnotationEngine:
             for annotator in annotators:
                 prepared_df = annotator.prepare(items_to_annotate, provided_id_fields)
                 annotations_col = annotator.get_annotations_bulk(
-                    prepared_df, name_field, category, prefixes, prefer_human=prefer_human
+                    prepared_df,
+                    name_field,
+                    category,
+                    prefixes,
+                    prefer_human=prefer_human,
+                    preferred_prefixes=preferred_prefixes,
                 )
                 annotated_rows = pd.Series(
                     [self._merge_nested_dicts(d1, d2) for d1, d2 in zip(annotated_rows, annotations_col)],
@@ -223,6 +262,7 @@ class AnnotationEngine:
         prefixes: list[str],
         annotators: list,
         prefer_human: bool = True,
+        preferred_prefixes: set[str] | None = None,
     ) -> pd.Series:
         """Annotate a single entity. Returns named series containing AssignedIDsDict."""
         # If user requested it, skip entities that have any provided IDs
@@ -237,7 +277,12 @@ class AnnotationEngine:
         for annotator in annotators:
             prepared_entity = annotator.prepare(item, provided_id_fields)
             entity_annotations = annotator.get_annotations(
-                prepared_entity, name_field, category, prefixes, prefer_human=prefer_human
+                prepared_entity,
+                name_field,
+                category,
+                prefixes,
+                prefer_human=prefer_human,
+                preferred_prefixes=preferred_prefixes,
             )
             assigned_ids: AssignedIDsDict = self._merge_nested_dicts(assigned_ids, entity_annotations)
 

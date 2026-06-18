@@ -57,3 +57,17 @@ HUMAN_MARKER_PREFIXES = {"HGNC"}
 # (default), gene/protein resolution misses for the curated drug-conflated symbols are resolved via the
 # deterministic non-search fallback. Set False to disable the bridge without a code revert.
 GENE_SYMBOL_FALLBACK_ENABLED = True
+
+# Per-category preferred (canonical) namespace prefixes for the prefer_canonical re-ranking. Within a
+# Biolink category, hybrid-search ranks across all namespaces at once, so a non-canonical same-text node
+# (UMLS/ICD/KEGG/PANTHER) frequently outranks the canonical one. These prefixes mark the canonical node so
+# the annotator can prefer it (see core/annotators/kestrel_hybrid.py:_select_canonical). Keys are Biolink
+# categories; the engine expands each via get_descendants so subcategories inherit the policy. Gene/protein
+# are intentionally absent — they use HUMAN_MARKER_PREFIXES / prefer_human instead.
+#
+# Prefix strings are the *actual* Kestrel KG prefixes, verified live 2026-06-18 against hybrid-search rows
+# (e.g. RefMet is "RM", not "REFMET"). A wrong string is a silent no-op (the filter matches nothing).
+CATEGORY_PREFERRED_NAMESPACES: dict[str, set[str]] = {
+    "biolink:SmallMolecule": {"CHEBI", "HMDB", "RM"},
+    "biolink:Disease": {"MONDO"},
+}
