@@ -25,8 +25,8 @@ class TestSelectCanonical:
             _row("CHEBI:28683", 2.50, "kynurenine"),
             _row("CHEBI:16946", 2.49, "L-kynurenine"),
         ]
-        chosen = KestrelHybridSearchAnnotator._select_canonical(rows, MET, "kynurenine")
-        assert chosen is not None and chosen["id"] == "CHEBI:28683"
+        chosen, is_canonical = KestrelHybridSearchAnnotator._select_canonical(rows, MET, "kynurenine")
+        assert chosen is not None and chosen["id"] == "CHEBI:28683" and is_canonical
 
     def test_name_mismatch_takes_top_scored_canonical(self):
         """CML: no MONDO name-matches the colloquial query -> the top-scored MONDO is chosen."""
@@ -35,17 +35,23 @@ class TestSelectCanonical:
             _row("MONDO:0011996", 2.50, "chronic myelogenous leukemia, BCR-ABL1 positive"),
             _row("MONDO:0004643", 1.50, "myeloid leukemia"),
         ]
-        chosen = KestrelHybridSearchAnnotator._select_canonical(rows, {"MONDO"}, "chronic myeloid leukemia")
-        assert chosen is not None and chosen["id"] == "MONDO:0011996"
+        chosen, is_canonical = KestrelHybridSearchAnnotator._select_canonical(
+            rows, {"MONDO"}, "chronic myeloid leukemia"
+        )
+        assert chosen is not None and chosen["id"] == "MONDO:0011996" and is_canonical
 
-    def test_empty_pool_falls_back_to_overall_top(self):
-        """No canonical-namespace candidate -> honest fallback to the overall top-scored row."""
+    def test_lowercase_kg_prefix_still_matches(self):
+        """A differently-cased KG namespace must still be recognized as canonical (case-insensitive filter)."""
+        rows = [_row("UMLS:X", 4.0, "thing"), _row("chebi:28683", 2.0, "thing")]
+        chosen, is_canonical = KestrelHybridSearchAnnotator._select_canonical(rows, MET, "thing")
+        assert chosen is not None and chosen["id"] == "chebi:28683" and is_canonical
+
+    def test_fallback_paths_are_not_canonical(self):
+        """Empty pool -> honest top-scored fallback (not canonical); empty results -> (None, False)."""
         rows = [_row("UMLS:X", 3.0, "foo"), _row("CHV:Y", 2.0, "foo")]
-        chosen = KestrelHybridSearchAnnotator._select_canonical(rows, MET, "foo")
-        assert chosen is not None and chosen["id"] == "UMLS:X"
-
-    def test_empty_results_returns_none(self):
-        assert KestrelHybridSearchAnnotator._select_canonical([], MET, "foo") is None
+        chosen, is_canonical = KestrelHybridSearchAnnotator._select_canonical(rows, MET, "foo")
+        assert chosen is not None and chosen["id"] == "UMLS:X" and not is_canonical
+        assert KestrelHybridSearchAnnotator._select_canonical([], MET, "foo") == (None, False)
 
     def test_homonym_disambiguated_by_name_or_synonym(self):
         """Multiple CHEBI rows; the one matching the query by name (or synonym) wins over higher-scored ones."""
@@ -53,7 +59,7 @@ class TestSelectCanonical:
             _row("CHEBI:29987", 1.44, "glutamate(2-)"),
             _row("CHEBI:14321", 1.44, "glutamate(1-)", synonyms=["glutamate"]),  # synonym match
         ]
-        chosen = KestrelHybridSearchAnnotator._select_canonical(rows, MET, "glutamate")
+        chosen, _ = KestrelHybridSearchAnnotator._select_canonical(rows, MET, "glutamate")
         assert chosen is not None and chosen["id"] == "CHEBI:14321"
 
 

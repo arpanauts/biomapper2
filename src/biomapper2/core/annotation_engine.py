@@ -176,12 +176,13 @@ class AnnotationEngine:
         Expands each configured key (e.g. ``biolink:SmallMolecule``, ``biolink:Disease``) via
         ``get_descendants`` so subcategories inherit the policy, mirroring ``_human_applicable_categories``.
         Cached per instance: the Biolink hierarchy is static at runtime. If two configured keys' descendant
-        sets overlap, the later key wins for the shared category — keep the policy keys disjoint.
+        sets overlap (e.g. via a shared mixin), the shared category inherits the **union** of both policies'
+        prefixes rather than silently dropping one.
         """
         resolved: dict[str, set[str]] = {}
         for category, prefixes in CATEGORY_PREFERRED_NAMESPACES.items():
             for descendant in self.biolink_client.get_descendants(category):
-                resolved[descendant] = set(prefixes)
+                resolved.setdefault(descendant, set()).update(prefixes)
         return resolved
 
     def _select_annotators(self, category: str) -> list[str]:

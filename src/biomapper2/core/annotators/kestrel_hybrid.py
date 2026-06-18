@@ -70,14 +70,15 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
                 resolved_curie = self._resolver.resolve(search_term)
                 if resolved_curie is not None:
                     chosen = {"id": resolved_curie, "score": _FALLBACK_SCORE, "resolved_via": "symbol_fallback"}
-            # Canonical-namespace preference (non-gene categories). The engine sets preferred_prefixes only
-            # when prefer_human is off for this category, so the two policies never compete.
+            # Canonical-namespace preference (non-gene categories). This is an `elif`: the engine sets
+            # preferred_prefixes only when prefer_human is off for this category, so the two policies are
+            # mutually exclusive — and even if a direct caller set both, the gene branch above wins.
             elif preferred_prefixes:
-                canonical = self._select_canonical(term_results, preferred_prefixes, search_term)
-                chosen = canonical
-                if canonical is not None and str(canonical.get("id", "")).split(":", 1)[0] in preferred_prefixes:
-                    # Tag only a genuine canonical pick (not the empty-pool fallback to the top-scored row).
-                    chosen = {**canonical, "resolved_via": "canonical_preference"}
+                chosen, is_canonical = self._select_canonical(term_results, preferred_prefixes, search_term)
+                if chosen is not None and is_canonical:
+                    # Tag only a genuine canonical pick (the selector reports it — not the empty-pool
+                    # fallback to the top-scored non-canonical row).
+                    chosen = {**chosen, "resolved_via": "canonical_preference"}
 
             if chosen is not None:
                 node_id = chosen["id"]
@@ -169,30 +170,38 @@ class KestrelHybridSearchAnnotator(BaseAnnotator):
     @staticmethod
     def _select_canonical(
         term_results: list[dict] | None, preferred_prefixes: set[str], search_term: str
-    ) -> dict | None:
+    ) -> tuple[dict | None, bool]:
         """Select the canonical-namespace candidate for a non-gene category, else the honest top-1.
+
+        Returns ``(chosen_row, is_canonical)`` where ``is_canonical`` is True only when ``chosen_row`` came
+        from the preferred-namespace pool — so the caller can tag provenance without re-deriving the
+        namespace it already filtered on. It is False for an empty result and for the empty-pool fallback.
 
         Validated against live Kestrel data (2026-06-18): within a category the canonical node (CHEBI/HMDB/
         RM for metabolites, MONDO for disease) routinely scores well *below* a conflated non-canonical node
         (UMLS/ICD/KEGG/PANTHER), so score is not a gate — the namespace filter plus an identity match is the
         discriminator. There is deliberately **no score-margin guard**.
 
-        1. Filter to rows whose ``id`` namespace is in ``preferred_prefixes`` (the chosen row's id is the
-           assigned CURIE, so this guarantees a canonical result — not merely a cross-referenced one).
-        2. Empty pool → honest fallback to the overall top-scored row (never fabricate a canonical CURIE).
+        1. Filter to rows whose ``id`` namespace is in ``preferred_prefixes``. Filtering on the ``id``
+           (the assigned CURIE) — not the broader ``prefixes`` xref list ``_select_result`` uses — guarantees
+           the *assigned* result is canonical, not merely cross-referenced. The comparison is case-insensitive
+           so a differently-cased KG prefix can't silently empty the pool.
+        2. Empty pool → honest fallback to the overall top-scored row, ``is_canonical=False`` (never
+           fabricate a canonical CURIE).
         3. Among the pool, prefer the rows whose ``name``/synonym matches the query (reuses ``_symbol_matches``
            directly), then take the highest-scoring of that sub-pool; if none match, the top-scored canonical
            row. This picks the right concept among same-namespace homonyms (e.g. CHEBI isomers) and the right
            specific node when the query does not exact-match any name (e.g. the top-scored MONDO for a disease).
         """
         if not term_results:
-            return None
-        pool = [r for r in term_results if str(r.get("id", "")).split(":", 1)[0] in preferred_prefixes]
+            return None, False
+        preferred_cf = {p.casefold() for p in preferred_prefixes}
+        pool = [r for r in term_results if str(r.get("id", "")).split(":", 1)[0].casefold() in preferred_cf]
         if not pool:
-            return term_results[0]
+            return term_results[0], False
         exact = [r for r in pool if KestrelHybridSearchAnnotator._symbol_matches(r, search_term)]
         candidates = exact if exact else pool
-        return max(candidates, key=lambda r: r.get("score", 0))
+        return max(candidates, key=lambda r: r.get("score", 0)), True
 
     @staticmethod
     def _symbol_matches(row: dict, search_term: str) -> bool:
