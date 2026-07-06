@@ -43,3 +43,31 @@ def get_kestrel_api_key() -> str:
 KESTREL_BATCHING_ENABLED = True  # Set to False to disable batching (for performance testing)
 KESTREL_BATCH_SIZE_SEARCH = 1000  # For text-search, vector-search, hybrid-search
 KESTREL_BATCH_SIZE_CANONICALIZE = 2000  # For canonicalize endpoint
+
+# Human-preference re-ranking for gene/protein resolution (see docs/plans HGNC plan).
+# When prefer_human is active, hybrid-search retrieves this many candidates (instead of 1) so the
+# human node — which often ranks below the wrong-species ortholog — is actually returned. Live spike
+# (2026-06-15) found recoverable human nodes at rank ~#4; 20 gives ample margin.
+HYBRID_SEARCH_LIMIT = 20
+# Human-only CURIE prefixes. HGNC assigns IDs only to human genes, so its presence in a hybrid-search
+# row's `prefixes` marks the human node. Any prefix added here must itself be human-exclusive.
+HUMAN_MARKER_PREFIXES = {"HGNC"}
+
+# Kill switch for the curated gene-symbol fallback bridge (see core/gene_symbol_resolver.py). When True
+# (default), gene/protein resolution misses for the curated drug-conflated symbols are resolved via the
+# deterministic non-search fallback. Set False to disable the bridge without a code revert.
+GENE_SYMBOL_FALLBACK_ENABLED = True
+
+# Per-category preferred (canonical) namespace prefixes for the prefer_canonical re-ranking. Within a
+# Biolink category, hybrid-search ranks across all namespaces at once, so a non-canonical same-text node
+# (UMLS/ICD/KEGG/PANTHER) frequently outranks the canonical one. These prefixes mark the canonical node so
+# the annotator can prefer it (see core/annotators/kestrel_hybrid.py:_select_canonical). Keys are Biolink
+# categories; the engine expands each via get_descendants so subcategories inherit the policy. Gene/protein
+# are intentionally absent — they use HUMAN_MARKER_PREFIXES / prefer_human instead.
+#
+# Prefix strings are the *actual* Kestrel KG prefixes, verified live 2026-06-18 against hybrid-search rows
+# (e.g. RefMet is "RM", not "REFMET"). A wrong string is a silent no-op (the filter matches nothing).
+CATEGORY_PREFERRED_NAMESPACES: dict[str, set[str]] = {
+    "biolink:SmallMolecule": {"CHEBI", "HMDB", "RM"},
+    "biolink:Disease": {"MONDO"},
+}

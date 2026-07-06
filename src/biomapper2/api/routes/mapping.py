@@ -96,6 +96,8 @@ async def map_entity(
             array_delimiters=body.options.array_delimiters,
             annotation_mode=body.options.annotation_mode,
             annotators=body.options.annotators,
+            prefer_human=body.options.prefer_human,
+            prefer_canonical=body.options.prefer_canonical,
         )
 
         result = extract_mapping_result(mapped_item, body.name)
@@ -163,6 +165,8 @@ async def map_batch(
                 array_delimiters=entity_req.options.array_delimiters,
                 annotation_mode=entity_req.options.annotation_mode,
                 annotators=entity_req.options.annotators,
+                prefer_human=entity_req.options.prefer_human,
+                prefer_canonical=entity_req.options.prefer_canonical,
             )
 
             result = extract_mapping_result(mapped_item, entity_req.name)
@@ -205,6 +209,8 @@ async def map_dataset(
     annotation_mode: str = "missing",
     annotators: str | None = None,  # Comma-separated
     vocab: str | None = None,
+    prefer_human: bool = True,
+    prefer_canonical: bool = True,
     _api_key: str = Depends(validate_api_key),
 ) -> DatasetMappingResponse:
     """
@@ -251,6 +257,8 @@ async def map_dataset(
             vocab=vocab,
             annotation_mode=annotation_mode,  # type: ignore
             annotators=annotator_list,
+            prefer_human=prefer_human,
+            prefer_canonical=prefer_canonical,
         )
 
     except Exception as e:
@@ -279,6 +287,8 @@ async def map_dataset_stream(
     annotation_mode: str = "missing",
     annotators: str | None = None,
     vocab: str | None = None,
+    prefer_human: bool = True,
+    prefer_canonical: bool = True,
     _api_key: str = Depends(validate_api_key),
 ) -> StreamingResponse:
     """
@@ -324,6 +334,8 @@ async def map_dataset_stream(
                     vocab=vocab,
                     annotation_mode=annotation_mode,  # type: ignore
                     annotators=annotator_list,
+                    prefer_human=prefer_human,
+                    prefer_canonical=prefer_canonical,
                 )
 
                 result = {

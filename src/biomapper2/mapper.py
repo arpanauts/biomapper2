@@ -55,6 +55,8 @@ class Mapper:
         stop_on_invalid_id: bool = False,
         annotation_mode: AnnotationMode = "missing",
         annotators: list[str] | None = None,
+        prefer_human: bool = True,
+        prefer_canonical: bool = True,
     ) -> pd.Series | dict[str, Any]:
         """
         Map a single entity to knowledge graph nodes.
@@ -94,6 +96,8 @@ class Mapper:
             prefixes=prefixes,
             mode=annotation_mode,
             annotators=annotators,
+            prefer_human=prefer_human,
+            prefer_canonical=prefer_canonical,
         )
         assert isinstance(annotation_result, pd.Series)
         entity = entity.update_from(annotation_result)
@@ -139,6 +143,8 @@ class Mapper:
         output_dir: str | Path = PROJECT_ROOT / "results",
         annotation_mode: AnnotationMode = "missing",
         annotators: list[str] | None = None,
+        prefer_human: bool = True,
+        prefer_canonical: bool = True,
     ) -> tuple[str, dict[str, Any]]:
         """
         Map all entities in a dataset to knowledge graph nodes.
@@ -218,6 +224,8 @@ class Mapper:
             prefixes=prefixes,
             mode=annotation_mode,
             annotators=annotators,
+            prefer_human=prefer_human,
+            prefer_canonical=prefer_canonical,
         )
         df = df.join(annotation_df)
         logging.info(f"After step 1 (annotation), df is: \n{df}")
